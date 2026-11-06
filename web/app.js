@@ -39,10 +39,13 @@ function signupPage(v){
     $('#rgo').onclick=function(){act(api('POST','/api/register-staff',{role:v,username:val('ru'),password:val('rp'),name:val('rn'),accessCode:val('rk')}).then(done))};
     return goBack();
   }
-  api('GET','/api/classes').catch(function(){return[]}).then(function(cls){
-    var opts=(cls||[]).map(function(c){return '<option>'+esc(c.name)+'</option>'}).join('');
-    $('#main').innerHTML='<div class="card"'+narrow+'><h2>Student sign-up</h2><label>Full name</label><input id="rn"><label>Username</label><input id="ru"><label>Password</label><input id="rp" type="password"><label>Student ID</label><input id="ri"><label>Class</label><select id="rc">'+opts+'</select><button class="p" id="rgo">Create account</button>'+back+'</div>';
-    $('#rgo').onclick=function(){act(api('POST','/api/register',{username:val('ru'),password:val('rp'),name:val('rn'),studentId:val('ri'),className:val('rc')}).then(done))};
+  api('GET','/api/courses').catch(function(){return[]}).then(function(cs){
+    var copts=cs.map(function(c){return '<option>'+esc(c.name)+'</option>'}).join('');
+    var sems='';for(var i=1;i<=(cs.length?cs[0].semesters:8);i++)sems+='<option>'+i+'</option>';
+    $('#main').innerHTML='<div class="card"'+narrow+'><h2>Student sign-up</h2><label>Full name</label><input id="rn"><label>Username</label><input id="ru"><label>Password</label><input id="rp" type="password"><label>Student ID</label><input id="ri"><label>Course</label><select id="rc">'+copts+'</select><label>Semester</label><select id="rs">'+sems+'</select><label>Section</label><select id="rt"></select><button class="p" id="rgo">Create account</button>'+back+'</div>';
+    var fillSections=function(){var c=cs.filter(function(x){return x.name===val('rc')})[0];$('#rt').innerHTML=(c?c.sections:[]).map(function(s){return '<option>'+esc(s)+'</option>'}).join('')};
+    fillSections();$('#rc').onchange=fillSections;
+    $('#rgo').onclick=function(){act(api('POST','/api/register',{username:val('ru'),password:val('rp'),name:val('rn'),studentId:val('ri'),course:val('rc'),semester:parseInt(val('rs'),10),section:val('rt')}).then(done))};
     goBack();
   });
 }
@@ -53,7 +56,7 @@ function tabsFor(){
 }
 function render(){
   if(!token||!me){$('#who').innerHTML='';$('#nav').innerHTML='';return loginView();}
-  $('#who').innerHTML=esc(me.name)+' ('+esc(me.role)+') <button class="s" id="out">Log out</button>';
+  $('#who').innerHTML=esc(me.name)+' ('+esc(me.role)+(me.course?' / '+esc(me.course)+' / Sem '+me.semester+' / '+esc(me.section):'')+') <button class="s" id="out">Log out</button>';
   $('#out').onclick=function(){api('POST','/api/logout',{}).catch(function(){});token='';me=null;sessionStorage.removeItem('tok');render()};
   var t=tabsFor();if(t.indexOf(tab)<0)tab=t[0];
   $('#nav').innerHTML=t.map(function(x){return '<button class="'+(x===tab?'on':'')+'" data-t="'+x+'">'+x+(x==='Notifications'&&me.unread?' ('+me.unread+')':'')+'</button>'}).join('');

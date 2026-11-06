@@ -404,9 +404,42 @@ static void testStaffSignup() {
     CHECK_THROWS(429, w.svc.registerStaff(ok, "Code123"));  // too many wrong codes
 }
 
+static void testCourses() {
+    std::cout << "course, semester and section\n";
+    World w;
+    json cs = w.svc.courses();
+    CHECK(cs.size() == 1 && cs[0]["name"] == "B.Tech CSE" && cs[0]["sections"].size() == 19 && cs[0]["semesters"] == 8);
+    json base = {{"username", "cstu1"}, {"password", "Passw0rd1"}, {"name", "Course Student"}, {"studentId", "77777"},
+                 {"course", "B.Tech CSE"}, {"semester", 3}, {"section", "ML2"}};
+    json r = w.svc.registerStudent(base);
+    json me = w.svc.me(r["id"].get<int>());
+    CHECK(me["course"] == "B.Tech CSE" && me["semester"] == 3 && me["section"] == "ML2" && me["className"] == "CSE-S3-ML2");
+    bool listed = false;
+    for (auto& c : w.svc.classes()) if (c["name"] == "CSE-S3-ML2") listed = true;
+    CHECK(listed);
+    json str = base; str["username"] = "cstu2"; str["studentId"] = "77778"; str["semester"] = "5"; str["section"] = "DS2";
+    CHECK(w.svc.me(w.svc.registerStudent(str)["id"].get<int>())["className"] == "CSE-S5-DS2");
+    json badSec = base; badSec["username"] = "cstu3"; badSec["studentId"] = "77779"; badSec["section"] = "Z";
+    CHECK_THROWS(400, w.svc.registerStudent(badSec));
+    json badSem = base; badSem["username"] = "cstu3"; badSem["studentId"] = "77779"; badSem["semester"] = 9;
+    CHECK_THROWS(400, w.svc.registerStudent(badSem));
+    json badCourse = base; badCourse["username"] = "cstu3"; badCourse["studentId"] = "77779"; badCourse["course"] = "Nope";
+    CHECK_THROWS(400, w.svc.registerStudent(badCourse));
+    bool leaked = false;
+    for (auto& c : w.svc.classes()) if (c["name"] == "CSE-S9-ML2" || c["name"] == "CSE-S3-Z") leaked = true;
+    CHECK(!leaked);  // failed sign-ups do not create classes
+    const char* want[] = {"A", "I", "ML1", "ML6", "CS1", "CS2", "DS1", "DS2"};
+    for (const char* sct : want) {
+        bool found = false;
+        for (auto& x : cs[0]["sections"]) if (x == sct) found = true;
+        CHECK(found);
+    }
+}
+
 int main() {
     testAccounts();
     testStaffSignup();
+    testCourses();
     testSubmissionAndGrouping();
     testPriorityAndAgeing();
     testClosedLoop();

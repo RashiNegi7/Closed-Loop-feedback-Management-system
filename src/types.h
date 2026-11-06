@@ -59,6 +59,9 @@ struct User {
     std::string name;
     std::string studentId;  // students only
     std::string className;  // students only
+    std::string course;     // students only, e.g. "B.Tech CSE"
+    int semester = 0;       // students only, 1-8
+    std::string section;    // students only, e.g. "ML2"
     Role role = Role::Student;
     std::string salt;
     std::string hash;

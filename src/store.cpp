@@ -27,7 +27,8 @@ E enumOr(const json& j, const char* key, bool (*parse)(const std::string&, E&), 
 
 json userJ(const User& u) {
     return {{"id", u.id}, {"username", u.username}, {"name", u.name}, {"studentId", u.studentId},
-            {"className", u.className}, {"role", toString(u.role)}, {"salt", u.salt}, {"hash", u.hash}};
+            {"className", u.className}, {"course", u.course}, {"semester", u.semester}, {"section", u.section},
+            {"role", toString(u.role)}, {"salt", u.salt}, {"hash", u.hash}};
 }
 User userFrom(const json& j) {
     User u;
@@ -36,6 +37,9 @@ User userFrom(const json& j) {
     u.name = j.value("name", "");
     u.studentId = j.value("studentId", "");
     u.className = j.value("className", "");
+    u.course = j.value("course", "");
+    u.semester = j.value("semester", 0);
+    u.section = j.value("section", "");
     u.role = enumOr<Role>(j, "role", parseRole, Role::Student);
     u.salt = j.value("salt", "");
     u.hash = j.value("hash", "");

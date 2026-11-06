@@ -121,6 +121,9 @@ int main(int argc, char** argv) {
         CROW_ROUTE(app, "/api/classes")([&](const crow::request& r) {
             return run(S, r, false, [&](int, const json&) { return S.classes(); });
         });
+        CROW_ROUTE(app, "/api/courses")([&](const crow::request& r) {
+            return run(S, r, false, [&](int, const json&) { return S.courses(); });
+        });
         CROW_ROUTE(app, "/api/register").methods("POST"_method)([&](const crow::request& r) {
             return run(S, r, false, [&](int, const json& b) { return S.registerStudent(b); }, 201);
         });

@@ -43,6 +43,7 @@ public:
     int authenticate(const std::string& token);  // -> user id, throws ApiError 401
     json me(int uid);
     json classes() const;
+    json courses() const;
 
     // ---------- students ----------
     json submitReport(int uid, const json& body);   // {category, message}

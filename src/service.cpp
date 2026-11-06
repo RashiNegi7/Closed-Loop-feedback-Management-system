@@ -144,6 +144,23 @@ bool Service::canSeeCategory(const User& u, Category c) const {
 
 // ------------------------------------------------------------------ accounts
 
+namespace {
+struct CourseInfo { const char* name; const char* code; std::vector<std::string> sections; };
+const std::vector<CourseInfo>& courseCatalog() {
+    static const std::vector<CourseInfo> c = {
+        {"B.Tech CSE", "CSE", {"A", "B", "C", "D", "E", "F", "G", "H", "I", "ML1", "ML2", "ML3", "ML4", "ML5", "ML6", "CS1", "CS2", "DS1", "DS2"}}};
+    return c;
+}
+const int MAX_SEMESTER = 8;
+const int DEFAULT_SECTION_ENROLLMENT = 60;
+}  // namespace
+
+json Service::courses() const {
+    json arr = json::array();
+    for (const auto& c : courseCatalog()) arr.push_back({{"name", c.name}, {"code", c.code}, {"semesters", MAX_SEMESTER}, {"sections", c.sections}});
+    return arr;
+}
+
 json Service::registerStudent(const json& body) {
     CommitGuard g(*this);
     std::string username = toLower(str(body, "username"));
@@ -152,13 +169,33 @@ json Service::registerStudent(const json& body) {
     std::string name = str(body, "name");
     std::string studentId = str(body, "studentId");
     std::string className = str(body, "className");
+    std::string course = str(body, "course");
+    std::string section = str(body, "section");
+    int semester = 0;
 
     if (!validUsername(username)) throw ApiError(400, "Username must be 3-32 letters, digits, '.', '_' or '-'.");
     checkPassword(password);
     if (!isNameWithoutDigits(name) || name.size() > 80) throw ApiError(400, "Name must contain letters and no digits.");
     if (!isAllDigits(studentId) || studentId.size() < 5 || studentId.size() > 20)
         throw ApiError(400, "Student ID must be 5-20 digits.");
-    if (!st_.enrollment.count(className)) throw ApiError(400, "Unknown class. Choose a class from the list.");
+    bool structured = !course.empty();
+    if (structured) {
+        const CourseInfo* ci = nullptr;
+        for (const auto& c : courseCatalog()) if (course == c.name) ci = &c;
+        if (!ci) throw ApiError(400, "Unknown course. Choose a course from the list.");
+        if (body.contains("semester")) {
+            const json& sv = body["semester"];
+            if (sv.is_number_integer()) semester = sv.get<int>();
+            else if (sv.is_string() && isAllDigits(sv.get<std::string>()) && sv.get<std::string>().size() <= 2) semester = std::stoi(sv.get<std::string>());
+        }
+        if (semester < 1 || semester > MAX_SEMESTER) throw ApiError(400, "Semester must be between 1 and 8.");
+        bool okSection = false;
+        for (const auto& s : ci->sections) if (s == section) okSection = true;
+        if (!okSection) throw ApiError(400, "Unknown section. Choose a section from the list.");
+        className = std::string(ci->code) + "-S" + std::to_string(semester) + "-" + section;
+    } else if (!st_.enrollment.count(className)) {
+        throw ApiError(400, "Unknown class. Choose a class from the list.");
+    }
     for (const auto& u : st_.users) {
         if (u.username == username) throw ApiError(409, "That username is already taken.");
         if (u.role == Role::Student && u.studentId == studentId) throw ApiError(409, "That student ID is already registered.");
@@ -169,6 +206,12 @@ json Service::registerStudent(const json& body) {
     u.name = name;
     u.studentId = studentId;
     u.className = className;
+    if (structured) {
+        u.course = course;
+        u.semester = semester;
+        u.section = section;
+        st_.enrollment.emplace(className, DEFAULT_SECTION_ENROLLMENT);
+    }
     u.role = Role::Student;
     u.salt = randomHex(16);
     u.hash = hashPassword(password, u.salt);
@@ -267,6 +310,11 @@ json Service::me(int uid) {
     if (u.role == Role::Student) {
         j["studentId"] = u.studentId;
         j["className"] = u.className;
+        if (!u.course.empty()) {
+            j["course"] = u.course;
+            j["semester"] = u.semester;
+            j["section"] = u.section;
+        }
     }
     j["now"] = static_cast<long long>(now());
     return j;
