@@ -124,6 +124,11 @@ int main(int argc, char** argv) {
         CROW_ROUTE(app, "/api/register").methods("POST"_method)([&](const crow::request& r) {
             return run(S, r, false, [&](int, const json& b) { return S.registerStudent(b); }, 201);
         });
+        CROW_ROUTE(app, "/api/register-staff").methods("POST"_method)([&](const crow::request& r) {
+            const char* code = std::getenv("FB_STAFF_CODE");
+            std::string required = code ? code : "";
+            return run(S, r, false, [&](int, const json& b) { return S.registerStaff(b, required); }, 201);
+        });
         CROW_ROUTE(app, "/api/login").methods("POST"_method)([&](const crow::request& r) {
             return run(S, r, false, [&](int, const json& b) {
                 std::string u = b.value("username", std::string());

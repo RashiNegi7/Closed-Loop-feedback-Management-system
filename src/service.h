@@ -37,6 +37,7 @@ public:
 
     // ---------- accounts ----------
     json registerStudent(const json& body);
+    json registerStaff(const json& body, const std::string& requiredCode);  // Faculty/Staff self sign-up, needs the admin-shared access code
     std::string login(const std::string& username, const std::string& password);
     void logout(const std::string& token);
     int authenticate(const std::string& token);  // -> user id, throws ApiError 401

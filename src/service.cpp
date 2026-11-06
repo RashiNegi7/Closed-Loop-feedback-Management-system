@@ -176,6 +176,42 @@ json Service::registerStudent(const json& body) {
     return {{"id", u.id}, {"username", u.username}, {"name", u.name}, {"role", "Student"}};
 }
 
+json Service::registerStaff(const json& body, const std::string& requiredCode) {
+    CommitGuard g(*this);
+    if (requiredCode.empty()) throw ApiError(403, "Faculty and staff sign-up is closed. Ask the admin to create your account.");
+    time_t t = std::time(nullptr);
+    auto& fail = loginFailures_["\x01staff-signup"];
+    if (fail.first >= MAX_LOGIN_FAILURES && t - fail.second < LOGIN_WINDOW)
+        throw ApiError(429, "Too many wrong access codes. Try again in a few minutes.");
+    if (t - fail.second >= LOGIN_WINDOW) fail = {0, t};
+    if (!constantTimeEquals(str(body, "accessCode"), requiredCode)) {
+        if (fail.first == 0) fail.second = t;
+        ++fail.first;
+        throw ApiError(403, "Wrong access code. Ask the admin for the code.");
+    }
+    std::string username = toLower(str(body, "username"));
+    std::string password = body.is_object() && body.contains("password") && body["password"].is_string()
+                               ? body["password"].get<std::string>() : "";
+    std::string name = str(body, "name");
+    Role role;
+    if (!parseRole(str(body, "role"), role) || (role != Role::Faculty && role != Role::Staff))
+        throw ApiError(400, "Choose Faculty or Staff.");
+    if (!validUsername(username)) throw ApiError(400, "Username must be 3-32 letters, digits, '.', '_' or '-'.");
+    checkPassword(password);
+    if (!isNameWithoutDigits(name) || name.size() > 80) throw ApiError(400, "Name must contain letters and no digits.");
+    for (const auto& u : st_.users) if (u.username == username) throw ApiError(409, "That username is already taken.");
+    loginFailures_.erase("\x01staff-signup");
+    User u;
+    u.id = nextId(st_.users);
+    u.username = username;
+    u.name = name;
+    u.role = role;
+    u.salt = randomHex(16);
+    u.hash = hashPassword(password, u.salt);
+    st_.users.push_back(u);
+    return {{"id", u.id}, {"username", u.username}, {"name", u.name}, {"role", toString(u.role)}};
+}
+
 std::string Service::login(const std::string& username, const std::string& password) {
     CommitGuard g(*this);
     std::string uname = toLower(trim(username));

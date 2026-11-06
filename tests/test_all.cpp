@@ -381,8 +381,32 @@ static void testAnalytics() {
     CHECK_THROWS(403, w.svc.analytics(w.students[0]));
 }
 
+static void testStaffSignup() {
+    std::cout << "faculty/staff sign-up\n";
+    World w;
+    json ok = {{"username", "newfac"}, {"password", "Passw0rd1"}, {"name", "New Faculty"}, {"role", "Faculty"}, {"accessCode", "Code123"}};
+    CHECK_THROWS(403, w.svc.registerStaff(ok, ""));  // closed when no code is configured
+    json bad = ok; bad["accessCode"] = "nope";
+    CHECK_THROWS(403, w.svc.registerStaff(bad, "Code123"));
+    json mod = ok; mod["role"] = "Moderator";
+    CHECK_THROWS(400, w.svc.registerStaff(mod, "Code123"));
+    json stu = ok; stu["role"] = "Student";
+    CHECK_THROWS(400, w.svc.registerStaff(stu, "Code123"));
+    json weak = ok; weak["password"] = "short";
+    CHECK_THROWS(400, w.svc.registerStaff(weak, "Code123"));
+    json r = w.svc.registerStaff(ok, "Code123");
+    CHECK(r["role"] == "Faculty");
+    CHECK(!w.svc.login("newfac", "Passw0rd1").empty());
+    CHECK_THROWS(409, w.svc.registerStaff(ok, "Code123"));
+    json st = ok; st["username"] = "newstaff"; st["role"] = "Staff";
+    CHECK(w.svc.registerStaff(st, "Code123")["role"] == "Staff");
+    for (int i = 0; i < 12; ++i) { try { w.svc.registerStaff(bad, "Code123"); } catch (const ApiError&) {} }
+    CHECK_THROWS(429, w.svc.registerStaff(ok, "Code123"));  // too many wrong codes
+}
+
 int main() {
     testAccounts();
+    testStaffSignup();
     testSubmissionAndGrouping();
     testPriorityAndAgeing();
     testClosedLoop();

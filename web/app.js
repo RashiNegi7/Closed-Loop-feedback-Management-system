@@ -16,13 +16,34 @@ function when(t){return new Date(t*1000).toLocaleString()}
 function tag(t){return '<span class="tag '+esc(t)+'">'+esc(t)+'</span>'}
 function val(id){var e=document.getElementById(id);return e?e.value:''}
 
+var view='login';
+var narrow=' style="max-width:440px;margin:16px auto"';
 function loginView(){
-  api('GET','/api/classes').catch(function(){return[]}).then(function(cls){
-  var opts=(cls||[]).map(function(c){return '<option>'+esc(c.name)+'</option>'}).join('');
-  $('#main').innerHTML='<div class="card"><h2>Log in</h2><label>Username</label><input id="lu"><label>Password</label><input id="lp" type="password"><button class="p" id="lgo">Log in</button></div>'+
-  '<div class="card"><h2>New student? Register</h2><label>Username</label><input id="ru"><label>Password</label><input id="rp" type="password"><label>Full name</label><input id="rn"><label>Student ID</label><input id="ri"><label>Class</label><select id="rc">'+opts+'</select><button class="p" id="rgo">Register</button></div>';
+  if(view==='choose')return choosePage();
+  if(view==='Student'||view==='Faculty'||view==='Staff')return signupPage(view);
+  $('#main').innerHTML='<div class="card"'+narrow+'><h2>Log in</h2><label>Username</label><input id="lu"><label>Password</label><input id="lp" type="password"><button class="p" id="lgo">Log in</button><p class="mut" style="text-align:center">New here?</p><button class="s" id="newu" style="width:100%">Sign up</button></div>';
   $('#lgo').onclick=function(){act(api('POST','/api/login',{username:val('lu'),password:val('lp')}).then(function(d){token=d.token;sessionStorage.setItem('tok',token);start()}))};
-  $('#rgo').onclick=function(){act(api('POST','/api/register',{username:val('ru'),password:val('rp'),name:val('rn'),studentId:val('ri'),className:val('rc')}).then(function(){toast('Registered. You can log in now.')}))};
+  $('#newu').onclick=function(){view='choose';loginView()};
+}
+function choosePage(){
+  $('#main').innerHTML='<div class="card"'+narrow+'><h2>Sign up as</h2><button class="p" data-v="Student">Student</button><button class="p" data-v="Faculty">Faculty</button><button class="p" data-v="Staff">Staff</button><button class="s" id="bk" style="width:100%;margin-top:14px">Back to login</button></div>';
+  Array.prototype.forEach.call(document.querySelectorAll('[data-v]'),function(b){b.onclick=function(){view=b.getAttribute('data-v');loginView()}});
+  $('#bk').onclick=function(){view='login';loginView()};
+}
+function signupPage(v){
+  var done=function(){toast('Account created. You can log in now.');view='login';loginView()};
+  var back='<button class="s" id="bk" style="width:100%;margin-top:14px">Back</button>';
+  var goBack=function(){$('#bk').onclick=function(){view='choose';loginView()}};
+  if(v!=='Student'){
+    $('#main').innerHTML='<div class="card"'+narrow+'><h2>'+v+' sign-up</h2><label>Full name</label><input id="rn"><label>Username</label><input id="ru"><label>Password</label><input id="rp" type="password"><label>Access code</label><input id="rk" type="password"><p class="mut">Ask the admin for the access code.</p><button class="p" id="rgo">Create account</button>'+back+'</div>';
+    $('#rgo').onclick=function(){act(api('POST','/api/register-staff',{role:v,username:val('ru'),password:val('rp'),name:val('rn'),accessCode:val('rk')}).then(done))};
+    return goBack();
+  }
+  api('GET','/api/classes').catch(function(){return[]}).then(function(cls){
+    var opts=(cls||[]).map(function(c){return '<option>'+esc(c.name)+'</option>'}).join('');
+    $('#main').innerHTML='<div class="card"'+narrow+'><h2>Student sign-up</h2><label>Full name</label><input id="rn"><label>Username</label><input id="ru"><label>Password</label><input id="rp" type="password"><label>Student ID</label><input id="ri"><label>Class</label><select id="rc">'+opts+'</select><button class="p" id="rgo">Create account</button>'+back+'</div>';
+    $('#rgo').onclick=function(){act(api('POST','/api/register',{username:val('ru'),password:val('rp'),name:val('rn'),studentId:val('ri'),className:val('rc')}).then(done))};
+    goBack();
   });
 }
 function tabsFor(){
