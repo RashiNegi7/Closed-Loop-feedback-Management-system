@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
         }
         if (demo) {
             S.seedDemoData();
-            std::cout << "Demo accounts (password Demo@1234): faculty1, staff1, student1..student6\n";
+            std::cout << "Demo logins (password Demo@1234): Faculty ID FAC1001, Staff ID STF1001, Student IDs 25100001000 to 25100001005\n";
         }
 
         crow::SimpleApp app;
@@ -136,7 +136,8 @@ int main(int argc, char** argv) {
             return run(S, r, false, [&](int, const json& b) {
                 std::string u = b.value("username", std::string());
                 std::string p = b.value("password", std::string());
-                std::string token = S.login(u, p);
+                std::string idv = b.value("id", std::string());
+                std::string token = idv.empty() ? S.login(u, p) : S.loginById(idv, p);
                 return json{{"token", token}, {"user", S.me(S.authenticate(token))}};
             });
         });

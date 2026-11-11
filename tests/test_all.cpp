@@ -384,7 +384,7 @@ static void testAnalytics() {
 static void testStaffSignup() {
     std::cout << "faculty/staff sign-up\n";
     World w;
-    json ok = {{"username", "newfac"}, {"password", "Passw0rd1"}, {"name", "New Faculty"}, {"role", "Faculty"}, {"accessCode", "Code123"}};
+    json ok = {{"username", "newfac"}, {"password", "Passw0rd1"}, {"name", "New Faculty"}, {"role", "Faculty"}, {"facultyId", "FAC2001"}, {"accessCode", "Code123"}};
     CHECK_THROWS(403, w.svc.registerStaff(ok, ""));  // closed when no code is configured
     json bad = ok; bad["accessCode"] = "nope";
     CHECK_THROWS(403, w.svc.registerStaff(bad, "Code123"));
@@ -398,7 +398,7 @@ static void testStaffSignup() {
     CHECK(r["role"] == "Faculty");
     CHECK(!w.svc.login("newfac", "Passw0rd1").empty());
     CHECK_THROWS(409, w.svc.registerStaff(ok, "Code123"));
-    json st = ok; st["username"] = "newstaff"; st["role"] = "Staff";
+    json st = ok; st["username"] = "newstaff"; st["role"] = "Staff"; st["facultyId"] = "STF2001";
     CHECK(w.svc.registerStaff(st, "Code123")["role"] == "Staff");
     for (int i = 0; i < 12; ++i) { try { w.svc.registerStaff(bad, "Code123"); } catch (const ApiError&) {} }
     CHECK_THROWS(429, w.svc.registerStaff(ok, "Code123"));  // too many wrong codes
@@ -436,10 +436,48 @@ static void testCourses() {
     }
 }
 
+static void testIdLogin() {
+    std::cout << "ID based login\n";
+    World w;
+    // students: Student ID + password; username is not accepted on the ID login
+    std::string tok = w.svc.loginById("25100000", "Passw0rd1");
+    CHECK(w.svc.me(w.svc.authenticate(tok))["role"] == "Student");
+    CHECK_THROWS(401, w.svc.loginById("25100000", "wrong"));
+    CHECK_THROWS(401, w.svc.loginById("stu0", "Passw0rd1"));
+    CHECK_THROWS(401, w.svc.loginById("99999999", "Passw0rd1"));
+    // faculty / staff: Faculty ID (any letter case) + password, role comes from the stored account
+    json base = {{"username", "idfac"}, {"password", "Passw0rd1"}, {"name", "Id Faculty"}, {"role", "Faculty"}, {"facultyId", "fac3001"}, {"accessCode", "C"}};
+    json r = w.svc.registerStaff(base, "C");
+    CHECK(r["facultyId"] == "FAC3001");
+    CHECK(w.svc.me(w.svc.authenticate(w.svc.loginById("FAC3001", "Passw0rd1")))["role"] == "Faculty");
+    CHECK(w.svc.me(w.svc.authenticate(w.svc.loginById("fac3001", "Passw0rd1")))["role"] == "Faculty");
+    CHECK_THROWS(401, w.svc.loginById("idfac", "Passw0rd1"));
+    // admin keeps the username
+    CHECK(w.svc.me(w.svc.authenticate(w.svc.loginById("admin", "Admin1234")))["role"] == "Moderator");
+    CHECK_THROWS(401, w.svc.loginById("fac", "Passw0rd1"));  // plain faculty username is not an ID
+    // Faculty ID rules
+    json noId = base; noId["username"] = "nid1"; noId.erase("facultyId");
+    CHECK_THROWS(400, w.svc.registerStaff(noId, "C"));
+    json badId = base; badId["username"] = "nid2"; badId["facultyId"] = "1234";
+    CHECK_THROWS(400, w.svc.registerStaff(badId, "C"));
+    json dup = base; dup["username"] = "nid3"; dup["facultyId"] = "Fac3001";
+    CHECK_THROWS(409, w.svc.registerStaff(dup, "C"));
+    json clash = base; clash["username"] = "nid4"; clash["facultyId"] = "admin";
+    CHECK_THROWS(409, w.svc.registerStaff(clash, "C"));
+    // admin-created accounts may carry a Faculty ID too
+    w.svc.createAccount(w.admin, {{"username", "adm2"}, {"password", "Passw0rd1"}, {"name", "Made Faculty"}, {"role", "Faculty"}, {"facultyId", "FAC4001"}});
+    CHECK(w.svc.me(w.svc.authenticate(w.svc.loginById("FAC4001", "Passw0rd1")))["role"] == "Faculty");
+    CHECK_THROWS(400, w.svc.createAccount(w.admin, {{"username", "adm3"}, {"password", "Passw0rd1"}, {"name", "Boss"}, {"role", "Moderator"}, {"facultyId", "ADM1"}}));
+    // repeated wrong passwords lock the ID out
+    for (int i = 0; i < 12; ++i) { try { w.svc.loginById("25100001", "bad"); } catch (const ApiError&) {} }
+    CHECK_THROWS(429, w.svc.loginById("25100001", "Passw0rd1"));
+}
+
 int main() {
     testAccounts();
     testStaffSignup();
     testCourses();
+    testIdLogin();
     testSubmissionAndGrouping();
     testPriorityAndAgeing();
     testClosedLoop();

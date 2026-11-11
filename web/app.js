@@ -21,8 +21,8 @@ var narrow=' style="max-width:440px;margin:16px auto"';
 function loginView(){
   if(view==='choose')return choosePage();
   if(view==='Student'||view==='Faculty'||view==='Staff')return signupPage(view);
-  $('#main').innerHTML='<div class="card"'+narrow+'><h2>Log in</h2><label>Username</label><input id="lu"><label>Password</label><input id="lp" type="password"><button class="p" id="lgo">Log in</button><p class="mut" style="text-align:center">New here?</p><button class="s" id="newu" style="width:100%">Sign up</button></div>';
-  $('#lgo').onclick=function(){act(api('POST','/api/login',{username:val('lu'),password:val('lp')}).then(function(d){token=d.token;sessionStorage.setItem('tok',token);start()}))};
+  $('#main').innerHTML='<div class="card"'+narrow+'><h2>Log in</h2><label>Student ID / Faculty ID</label><input id="lu" placeholder="Student ID or Faculty ID (admin: username)" autocomplete="username"><label>Password</label><input id="lp" type="password"><button class="p" id="lgo">Log in</button><p class="mut" style="text-align:center">New here?</p><button class="s" id="newu" style="width:100%">Sign up</button></div>';
+  $('#lgo').onclick=function(){var id=val('lu').trim();if(!id||!val('lp')){return toast('Enter your ID and password.')}act(api('POST','/api/login',{id:id,password:val('lp')}).then(function(d){token=d.token;sessionStorage.setItem('tok',token);start()}))};
   $('#newu').onclick=function(){view='choose';loginView()};
 }
 function choosePage(){
@@ -35,8 +35,8 @@ function signupPage(v){
   var back='<button class="s" id="bk" style="width:100%;margin-top:14px">Back</button>';
   var goBack=function(){$('#bk').onclick=function(){view='choose';loginView()}};
   if(v!=='Student'){
-    $('#main').innerHTML='<div class="card"'+narrow+'><h2>'+v+' sign-up</h2><label>Full name</label><input id="rn"><label>Username</label><input id="ru"><label>Password</label><input id="rp" type="password"><label>Access code</label><input id="rk" type="password"><p class="mut">Ask the admin for the access code.</p><button class="p" id="rgo">Create account</button>'+back+'</div>';
-    $('#rgo').onclick=function(){act(api('POST','/api/register-staff',{role:v,username:val('ru'),password:val('rp'),name:val('rn'),accessCode:val('rk')}).then(done))};
+    $('#main').innerHTML='<div class="card"'+narrow+'><h2>'+v+' sign-up</h2><label>Full name</label><input id="rn"><label>'+v+' ID</label><input id="rf" placeholder="e.g. '+(v==='Faculty'?'FAC1001':'STF1001')+'"><label>Username</label><input id="ru"><label>Password</label><input id="rp" type="password"><label>Access code</label><input id="rk" type="password"><p class="mut">Ask the admin for the access code.</p><button class="p" id="rgo">Create account</button>'+back+'</div>';
+    $('#rgo').onclick=function(){act(api('POST','/api/register-staff',{role:v,facultyId:val('rf'),username:val('ru'),password:val('rp'),name:val('rn'),accessCode:val('rk')}).then(done))};
     return goBack();
   }
   api('GET','/api/courses').catch(function(){return[]}).then(function(cs){
@@ -132,10 +132,10 @@ function modView(){
 function adminView(){
   $('#main').innerHTML='<div class="card"><h2>Advance days (demo clock)</h2><input id="ad" type="number" value="7"><button class="p" id="adg">Advance</button></div>'+
   '<div class="card"><h2>Class enrollment</h2><label>Class name</label><input id="en"><label>Students enrolled</label><input id="ec" type="number"><button class="p" id="eg">Save</button></div>'+
-  '<div class="card"><h2>Create staff/faculty account</h2><label>Username</label><input id="au"><label>Password</label><input id="ap" type="password"><label>Name</label><input id="an"><label>Role</label><select id="ar"><option>Faculty</option><option>Staff</option><option>Moderator</option></select><button class="p" id="ag">Create</button></div>';
+  '<div class="card"><h2>Create staff/faculty account</h2><label>Username</label><input id="au"><label>Password</label><input id="ap" type="password"><label>Name</label><input id="an"><label>Role</label><select id="ar"><option>Faculty</option><option>Staff</option><option>Moderator</option></select><label>Faculty / Staff ID (not needed for Moderator)</label><input id="af"><button class="p" id="ag">Create</button></div>';
   $('#adg').onclick=function(){act(api('POST','/api/admin/advance-days',{days:parseInt(val('ad'),10)||0}),'Clock advanced')};
   $('#eg').onclick=function(){act(api('POST','/api/admin/enrollment',{className:val('en'),count:parseInt(val('ec'),10)||0}),'Saved')};
-  $('#ag').onclick=function(){act(api('POST','/api/admin/accounts',{username:val('au'),password:val('ap'),name:val('an'),role:val('ar')}),'Account created')};
+  $('#ag').onclick=function(){act(api('POST','/api/admin/accounts',{username:val('au'),password:val('ap'),name:val('an'),role:val('ar'),facultyId:val('af')}),'Account created')};
 }
 function notifView(){
   api('GET','/api/notifications').then(function(n){

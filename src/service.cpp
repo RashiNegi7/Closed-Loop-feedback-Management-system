@@ -32,6 +32,13 @@ std::string str(const json& body, const char* key) {
     return trim(body[key].get<std::string>());
 }
 
+bool validFacultyId(const std::string& id) {
+    if (id.size() < 3 || id.size() > 20 || !std::isalpha(static_cast<unsigned char>(id[0]))) return false;
+    for (unsigned char c : id)
+        if (!(std::isalnum(c) || c == '-')) return false;
+    return true;
+}
+
 bool validUsername(const std::string& u) {
     if (u.size() < 3 || u.size() > 32) return false;
     for (unsigned char c : u)
@@ -236,23 +243,43 @@ json Service::registerStaff(const json& body, const std::string& requiredCode) {
     std::string password = body.is_object() && body.contains("password") && body["password"].is_string()
                                ? body["password"].get<std::string>() : "";
     std::string name = str(body, "name");
+    std::string fid = toUpper(trim(str(body, "facultyId")));
     Role role;
     if (!parseRole(str(body, "role"), role) || (role != Role::Faculty && role != Role::Staff))
         throw ApiError(400, "Choose Faculty or Staff.");
+    if (!validFacultyId(fid)) throw ApiError(400, "Faculty/Staff ID must be 3-20 letters, digits or '-', starting with a letter.");
     if (!validUsername(username)) throw ApiError(400, "Username must be 3-32 letters, digits, '.', '_' or '-'.");
     checkPassword(password);
     if (!isNameWithoutDigits(name) || name.size() > 80) throw ApiError(400, "Name must contain letters and no digits.");
-    for (const auto& u : st_.users) if (u.username == username) throw ApiError(409, "That username is already taken.");
+    for (const auto& u : st_.users) {
+        if (u.username == username) throw ApiError(409, "That username is already taken.");
+        if (toUpper(u.facultyId) == fid || toUpper(u.username) == fid) throw ApiError(409, "That Faculty/Staff ID is already registered.");
+    }
     loginFailures_.erase("\x01staff-signup");
     User u;
     u.id = nextId(st_.users);
     u.username = username;
     u.name = name;
     u.role = role;
+    u.facultyId = fid;
     u.salt = randomHex(16);
     u.hash = hashPassword(password, u.salt);
     st_.users.push_back(u);
-    return {{"id", u.id}, {"username", u.username}, {"name", u.name}, {"role", toString(u.role)}};
+    return {{"id", u.id}, {"username", u.username}, {"name", u.name}, {"role", toString(u.role)}, {"facultyId", u.facultyId}};
+}
+
+std::string Service::loginById(const std::string& id, const std::string& password) {
+    std::string key = toLower(trim(id));
+    std::string uname = "\x01" + key;  // matches no account, so an unknown ID fails like a wrong password
+    {
+        READ_LOCK;
+        for (const auto& u : st_.users) {
+            if (u.role == Role::Student && !u.studentId.empty() && u.studentId == trim(id)) uname = u.username;
+            else if ((u.role == Role::Faculty || u.role == Role::Staff) && !u.facultyId.empty() && toLower(u.facultyId) == key) uname = u.username;
+            else if (u.role == Role::Moderator && u.username == key) uname = u.username;
+        }
+    }
+    return login(uname, password);
 }
 
 std::string Service::login(const std::string& username, const std::string& password) {
@@ -272,7 +299,7 @@ std::string Service::login(const std::string& username, const std::string& passw
     if (!found || !constantTimeEquals(h, found->hash)) {
         if (fail.first == 0) fail.second = t;
         ++fail.first;
-        throw ApiError(401, "Wrong username or password.");
+        throw ApiError(401, "Invalid ID or password.");
     }
     loginFailures_.erase(uname);
     std::string token = randomHex(24);
@@ -339,12 +366,19 @@ json Service::createAccount(int uid, const json& body) {
     if (!validUsername(username)) throw ApiError(400, "Username must be 3-32 letters, digits, '.', '_' or '-'.");
     checkPassword(password);
     if (!isNameWithoutDigits(name)) throw ApiError(400, "Name must contain letters and no digits.");
-    for (const auto& u : st_.users) if (u.username == username) throw ApiError(409, "That username is already taken.");
+    std::string fid = toUpper(trim(str(body, "facultyId")));
+    if (!fid.empty() && role == Role::Moderator) throw ApiError(400, "Admin accounts log in with their username, not a Faculty ID.");
+    if (!fid.empty() && !validFacultyId(fid)) throw ApiError(400, "Faculty/Staff ID must be 3-20 letters, digits or '-', starting with a letter.");
+    for (const auto& u : st_.users) {
+        if (u.username == username) throw ApiError(409, "That username is already taken.");
+        if (!fid.empty() && (toUpper(u.facultyId) == fid || toUpper(u.username) == fid)) throw ApiError(409, "That Faculty/Staff ID is already registered.");
+    }
     User u;
     u.id = nextId(st_.users);
     u.username = username;
     u.name = name;
     u.role = role;
+    u.facultyId = fid;
     u.salt = randomHex(16);
     u.hash = hashPassword(password, u.salt);
     st_.users.push_back(u);
@@ -1149,6 +1183,10 @@ void Service::seedDemoData() {
     };
     add("faculty1", "Dr Meera Sharma", Role::Faculty, "", "");
     add("staff1", "Ravi Rao", Role::Staff, "", "");
+    for (auto& x : st_.users) {
+        if (x.username == "faculty1" && x.facultyId.empty()) x.facultyId = "FAC1001";
+        if (x.username == "staff1" && x.facultyId.empty()) x.facultyId = "STF1001";
+    }
     const char* names[] = {"Asha Verma", "Kabir Singh", "Neha Joshi", "Rohan Mehta", "Isha Kapoor", "Dev Patel"};
     for (int i = 0; i < 6; ++i)
         add("student" + std::to_string(i + 1), names[i], Role::Student, "2510000" + std::to_string(1000 + i), i % 3 == 0 ? "CSE-A" : i % 3 == 1 ? "CSE-B" : "ECE-A");

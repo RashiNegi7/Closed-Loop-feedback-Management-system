@@ -195,7 +195,7 @@ int main(int argc, char** argv) {
     }
     if (demo) {
         s.seedDemoData();
-        std::cout << "Demo accounts (password Demo@1234): faculty1, staff1, student1..student6\n";
+        std::cout << "Demo logins (password Demo@1234): Faculty ID FAC1001, Staff ID STF1001, Student IDs 25100001000 to 25100001005\n";
     }
     std::cout << "Closed Loop Feedback Management System (console)\n";
     while (true) {

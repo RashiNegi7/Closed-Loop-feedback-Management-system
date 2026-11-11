@@ -58,6 +58,7 @@ struct User {
     std::string username;
     std::string name;
     std::string studentId;  // students only
+    std::string facultyId;  // faculty/staff only, e.g. "FAC1001"
     std::string className;  // students only
     std::string course;     // students only, e.g. "B.Tech CSE"
     int semester = 0;       // students only, 1-8
