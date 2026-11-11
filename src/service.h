@@ -81,6 +81,7 @@ public:
     // Creates the first administrator. Returns the password that was used.
     std::string bootstrapAdmin(const std::string& password = "");
     void seedDemoData();
+    void seedDemoComplaints();  // sample complaints worked through the full loop (demo only)
     time_t now() const;
     const State& state() const { return st_; }
     const Config& config() const { return cfg_; }

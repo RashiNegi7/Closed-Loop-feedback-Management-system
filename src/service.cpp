@@ -1190,6 +1190,63 @@ void Service::seedDemoData() {
     const char* names[] = {"Asha Verma", "Kabir Singh", "Neha Joshi", "Rohan Mehta", "Isha Kapoor", "Dev Patel"};
     for (int i = 0; i < 6; ++i)
         add("student" + std::to_string(i + 1), names[i], Role::Student, "2510000" + std::to_string(1000 + i), i % 3 == 0 ? "CSE-A" : i % 3 == 1 ? "CSE-B" : "ECE-A");
+    seedDemoComplaints();
+}
+
+// Sample complaints from the demo student IDs, worked through the real workflow so the history,
+// notifications and analytics are genuine. Only runs on an empty system.
+void Service::seedDemoComplaints() {
+    CommitGuard g(*this);
+    if (!st_.reports.empty()) return;
+    auto uid = [&](const std::string& un) {
+        for (const auto& u : st_.users) if (u.username == un) return u.id;
+        return 0;
+    };
+    int fac = uid("faculty1"), stf = uid("staff1");
+    int s[7];
+    for (int i = 1; i <= 6; ++i) s[i] = uid("student" + std::to_string(i));
+    auto post = [&](int stu, const char* cat, const char* msg) { return submitReport(stu, {{"category", cat}, {"message", msg}}); };
+    // works an issue up to "waiting for confirmation"
+    auto fix = [&](int team, int issueId, const char* action) {
+        reviewIssue(team, issueId);
+        int tid = openTicket(team, issueId)["id"].get<int>();
+        claimTicket(team, tid, json::object());
+        completeTicket(team, tid, {{"actionTaken", action}});
+    };
+    auto yes = [&](int stu, int issueId) { confirm(stu, issueId, {{"solved", true}}); };
+
+    // 1) Teaching, three students report the same thing -> grouped, solved by faculty, all confirm -> Resolved
+    int a = post(s[1], "Teaching", "The data structures lectures go too fast and the examples are not explained properly")["issueId"].get<int>();
+    post(s[4], "Teaching", "Data structures lectures are too fast and the examples are not explained properly in class");
+    post(s[2], "Teaching", "Examples in the data structures lectures are not explained properly and the pace is too fast");
+    fix(fac, a, "Added a Friday revision class and shared worked examples on the portal");
+    yes(s[1], a); yes(s[4], a); yes(s[2], a);
+
+    // 2) Facilities, two students, solved by staff, both confirm -> Resolved
+    int b = post(s[5], "Facilities", "The projector in room 204 is not working and the display keeps flickering")["issueId"].get<int>();
+    post(s[1], "Facilities", "Projector in room 204 keeps flickering and often does not work during lectures");
+    fix(stf, b, "Replaced the projector lamp and the HDMI cable in room 204");
+    yes(s[5], b); yes(s[1], b);
+
+    // 3) Portal problem fixed, student says it is NOT solved yet -> the loop reopens it
+    int c = post(s[3], "Portal", "Lecture notes cannot be downloaded from the student portal and it shows an error")["issueId"].get<int>();
+    fix(stf, c, "Restarted the file service on the portal server");
+    confirm(s[3], c, {{"solved", false}, {"comment", "I still get the same error when I try to download the notes"}});
+
+    // 4) Teaching, solved by faculty, one student confirmed and one still to answer -> waiting for confirmation
+    int d = post(s[3], "Teaching", "The lab timetable clashes with the mathematics lecture every Wednesday afternoon")["issueId"].get<int>();
+    post(s[6], "Teaching", "Wednesday afternoon lab timetable clashes with the mathematics lecture for our class");
+    fix(fac, d, "Moved the Wednesday lab to Thursday morning and updated the timetable");
+    yes(s[3], d);
+
+    // 5) Under review, ticket taken by staff
+    int e = post(s[2], "Facilities", "The water cooler on the second floor is leaking near the staircase")["issueId"].get<int>();
+    reviewIssue(stf, e);
+    claimTicket(stf, openTicket(stf, e)["id"].get<int>(), json::object());
+
+    // 6) New, not yet looked at
+    post(s[4], "Other", "The library closes too early on weekdays during the exam weeks");
+    post(s[6], "Portal", "The attendance page on the portal is very slow to load in the evening");
 }
 
 }  // namespace fb

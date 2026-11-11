@@ -473,11 +473,29 @@ static void testIdLogin() {
     CHECK_THROWS(429, w.svc.loginById("25100001", "Passw0rd1"));
 }
 
+static void testDemoSeed() {
+    std::cout << "demo data\n";
+    Service svc;
+    svc.bootstrapAdmin("Admin1234");
+    svc.seedDemoData();
+    auto count = [&](IssueStatus st) { int n = 0; for (const auto& i : svc.state().issues) if (i.status == st) ++n; return n; };
+    CHECK(svc.state().issues.size() == 7);
+    CHECK(count(IssueStatus::Resolved) == 2);
+    CHECK(count(IssueStatus::WaitingForConfirmation) == 1);
+    CHECK(count(IssueStatus::New) == 2);
+    size_t reports = svc.state().reports.size();
+    svc.seedDemoData();  // running again must not duplicate anything
+    CHECK(svc.state().issues.size() == 7 && svc.state().reports.size() == reports);
+    CHECK(!svc.loginById("25100001000", "Demo@1234").empty());
+    CHECK(!svc.loginById("FAC1001", "Demo@1234").empty());
+}
+
 int main() {
     testAccounts();
     testStaffSignup();
     testCourses();
     testIdLogin();
+    testDemoSeed();
     testSubmissionAndGrouping();
     testPriorityAndAgeing();
     testClosedLoop();
