@@ -1167,7 +1167,8 @@ std::string Service::bootstrapAdmin(const std::string& password) {
 
 void Service::seedDemoData() {
     CommitGuard g(*this);
-    st_.enrollment = {{"CSE-A", 60}, {"CSE-B", 55}, {"ECE-A", 50}};
+    st_.enrollment = {{"CSE-S3-A", 60}, {"CSE-S3-B", 55}, {"CSE-S3-ML1", 50}, {"CSE-S5-CS1", 45},
+                      {"CSE-S5-DS1", 40}, {"CSE-S5-DS2", 40}, {"CSE-S1-C", 60}};
     auto add = [&](const std::string& un, const std::string& name, Role role, const std::string& sid, const std::string& cls) {
         for (const auto& x : st_.users) if (x.username == un) return;
         User u;
@@ -1183,13 +1184,29 @@ void Service::seedDemoData() {
     };
     add("faculty1", "Dr Meera Sharma", Role::Faculty, "", "");
     add("staff1", "Ravi Rao", Role::Staff, "", "");
+    add("faculty2", "Prof. Anil Kumar", Role::Faculty, "", "");
+    add("staff2", "Sunita Devi", Role::Staff, "", "");
     for (auto& x : st_.users) {
         if (x.username == "faculty1" && x.facultyId.empty()) x.facultyId = "FAC1001";
         if (x.username == "staff1" && x.facultyId.empty()) x.facultyId = "STF1001";
+        if (x.username == "faculty2" && x.facultyId.empty()) x.facultyId = "FAC1002";
+        if (x.username == "staff2" && x.facultyId.empty()) x.facultyId = "STF1002";
     }
-    const char* names[] = {"Asha Verma", "Kabir Singh", "Neha Joshi", "Rohan Mehta", "Isha Kapoor", "Dev Patel"};
-    for (int i = 0; i < 6; ++i)
-        add("student" + std::to_string(i + 1), names[i], Role::Student, "2510000" + std::to_string(1000 + i), i % 3 == 0 ? "CSE-A" : i % 3 == 1 ? "CSE-B" : "ECE-A");
+    const char* names[] = {"Asha Verma", "Kabir Singh", "Neha Joshi", "Rohan Mehta", "Isha Kapoor", "Dev Patel",
+                           "Priya Nair", "Arjun Rao", "Sneha Gupta", "Vikram Shah", "Ananya Das", "Karan Malhotra"};
+    const int sems[] = {3, 3, 3, 3, 3, 3, 5, 5, 5, 5, 1, 1};
+    const char* secs[] = {"A", "B", "ML1", "A", "B", "ML1", "CS1", "CS1", "DS1", "DS2", "C", "C"};
+    for (int i = 0; i < 12; ++i) {
+        std::string un = "student" + std::to_string(i + 1);
+        std::string cls = "CSE-S" + std::to_string(sems[i]) + "-" + secs[i];
+        add(un, names[i], Role::Student, "2510000" + std::to_string(1000 + i), cls);
+        for (auto& x : st_.users)
+            if (x.username == un && x.course.empty()) {
+                x.course = "B.Tech CSE";
+                x.semester = sems[i];
+                x.section = secs[i];
+            }
+    }
     seedDemoComplaints();
 }
 
@@ -1202,9 +1219,9 @@ void Service::seedDemoComplaints() {
         for (const auto& u : st_.users) if (u.username == un) return u.id;
         return 0;
     };
-    int fac = uid("faculty1"), stf = uid("staff1");
-    int s[7];
-    for (int i = 1; i <= 6; ++i) s[i] = uid("student" + std::to_string(i));
+    int fac = uid("faculty1"), stf = uid("staff1"), fac2 = uid("faculty2"), stf2 = uid("staff2");
+    int s[13];
+    for (int i = 1; i <= 12; ++i) s[i] = uid("student" + std::to_string(i));
     auto post = [&](int stu, const char* cat, const char* msg) { return submitReport(stu, {{"category", cat}, {"message", msg}}); };
     // works an issue up to "waiting for confirmation"
     auto fix = [&](int team, int issueId, const char* action) {
@@ -1247,6 +1264,44 @@ void Service::seedDemoComplaints() {
     // 6) New, not yet looked at
     post(s[4], "Other", "The library closes too early on weekdays during the exam weeks");
     post(s[6], "Portal", "The attendance page on the portal is very slow to load in the evening");
+
+    // 7) Safety report: critical words ("sparking", "exposed wire", "unsafe") give it the top priority and move it to review with a ticket automatically; staff took the ticket
+    int iSafety = post(s[7], "Facilities", "Sparking from an exposed wire near the switchboard in lab 3 is unsafe for students")["issueId"].get<int>();
+    post(s[8], "Facilities", "Exposed wire sparking near the lab 3 switchboard is unsafe, please check it urgently");
+    for (const auto& t : st_.tickets)  // critical issues get their ticket automatically
+        if (t.issueId == iSafety) claimTicket(stf2, t.id, json::object());
+
+    // 8) Five students from four classes: reaches High priority, solved by a second faculty member
+    int iMarks = post(s[7], "Teaching", "Internal marks for the operating systems assignment are not visible on the portal")["issueId"].get<int>();
+    post(s[8], "Teaching", "Operating systems assignment internal marks are not visible on the portal");
+    post(s[9], "Teaching", "We cannot see the internal marks of the operating systems assignment on the portal");
+    post(s[10], "Teaching", "Operating systems assignment marks are missing from the portal internal marks page");
+    post(s[3], "Teaching", "Internal marks of the operating systems assignment do not show on the portal");
+    fix(fac2, iMarks, "Uploaded the missing internal marks and shared the evaluation sheet with the class");
+    yes(s[7], iMarks); yes(s[8], iMarks); yes(s[9], iMarks); yes(s[10], iMarks); yes(s[3], iMarks);
+
+    // 9) Canteen filter, solved by the second staff member
+    int iFilter = post(s[11], "Facilities", "The water filter in the ground floor canteen has been out of order for a week")["issueId"].get<int>();
+    post(s[12], "Facilities", "Ground floor canteen water filter is out of order since last week");
+    fix(stf2, iFilter, "Replaced the filter cartridge and cleaned the storage tank");
+    yes(s[11], iFilter); yes(s[12], iFilter);
+
+    // 10) Attendance mistake: fixed, but one student says it is still wrong
+    int iAttend = post(s[2], "Teaching", "Attendance for the Friday lab session was marked wrong for several students")["issueId"].get<int>();
+    post(s[5], "Teaching", "Friday lab attendance was marked wrong for several of us in the session");
+    fix(fac, iAttend, "Corrected the Friday lab attendance in the register");
+    yes(s[5], iAttend);
+    confirm(s[2], iAttend, {{"solved", false}, {"comment", "My attendance for that Friday is still showing absent"}});
+
+    // 11) Under review, in progress and new
+    int iDoubt = post(s[10], "Teaching", "We need extra doubt solving sessions for algorithms before the mid semester exams")["issueId"].get<int>();
+    reviewIssue(fac2, iDoubt);
+    int iBus = post(s[11], "Other", "The evening bus route should wait for students until the lab sessions finish")["issueId"].get<int>();
+    post(s[12], "Other", "Evening bus should wait until the lab sessions finish so we can reach home safely");
+    reviewIssue(stf, iBus);
+    claimTicket(stf, openTicket(stf, iBus)["id"].get<int>(), json::object());
+    post(s[12], "Other", "The parking area near the main gate becomes overcrowded every morning");
+    post(s[7], "Portal", "Fee receipt download gives a blank white page whenever I open the payments section");
 }
 
 }  // namespace fb

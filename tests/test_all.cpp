@@ -479,15 +479,24 @@ static void testDemoSeed() {
     svc.bootstrapAdmin("Admin1234");
     svc.seedDemoData();
     auto count = [&](IssueStatus st) { int n = 0; for (const auto& i : svc.state().issues) if (i.status == st) ++n; return n; };
-    CHECK(svc.state().issues.size() == 7);
-    CHECK(count(IssueStatus::Resolved) == 2);
+    auto level = [&](Priority p) { int n = 0; for (const auto& i : svc.state().issues) if (i.priority == p) ++n; return n; };
+    CHECK(svc.state().issues.size() == 15);
+    CHECK(count(IssueStatus::Resolved) == 4);
     CHECK(count(IssueStatus::WaitingForConfirmation) == 1);
-    CHECK(count(IssueStatus::New) == 2);
+    CHECK(count(IssueStatus::New) == 4);
+    CHECK(count(IssueStatus::UnderReview) == 1);
+    CHECK(count(IssueStatus::InProgress) == 5);
+    CHECK(level(Priority::Critical) == 1);  // the safety report
+    CHECK(level(Priority::High) == 1);      // marks issue reported from four classes
     size_t reports = svc.state().reports.size();
     svc.seedDemoData();  // running again must not duplicate anything
-    CHECK(svc.state().issues.size() == 7 && svc.state().reports.size() == reports);
+    CHECK(svc.state().issues.size() == 15 && svc.state().reports.size() == reports);
     CHECK(!svc.loginById("25100001000", "Demo@1234").empty());
-    CHECK(!svc.loginById("FAC1001", "Demo@1234").empty());
+    CHECK(!svc.loginById("25100001011", "Demo@1234").empty());
+    CHECK(!svc.loginById("FAC1001", "Demo@1234").empty() && !svc.loginById("FAC1002", "Demo@1234").empty());
+    CHECK(!svc.loginById("STF1001", "Demo@1234").empty() && !svc.loginById("STF1002", "Demo@1234").empty());
+    json me = svc.me(svc.authenticate(svc.loginById("25100001006", "Demo@1234")));
+    CHECK(me["course"] == "B.Tech CSE" && me["semester"] == 5 && me["section"] == "CS1");
 }
 
 static void testContainers() {
