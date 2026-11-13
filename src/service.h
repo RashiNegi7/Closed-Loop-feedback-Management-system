@@ -4,10 +4,8 @@
 #define FB_SERVICE_H
 
 #include "types.h"
-#include <map>
 #include <mutex>
-#include <nlohmann/json.hpp>
-#include <set>
+#include "ds_json.h"
 
 namespace fb {
 
@@ -26,8 +24,8 @@ struct PriorityBreakdown {
     int pointsAge = 0;
     int score = 0;
     Priority level = Priority::Low;
-    std::vector<std::string> criticalWords;
-    std::vector<std::string> urgentWords;
+    ScratchVector<std::string> criticalWords;
+    ScratchVector<std::string> urgentWords;
 };
 
 class Service {
@@ -94,8 +92,8 @@ private:
     mutable std::recursive_mutex mu_;
 
     struct Session { int uid; time_t expires; };
-    std::map<std::string, Session> sessions_;
-    std::map<std::string, std::pair<int, time_t>> loginFailures_;
+    ScratchMap<std::string, Session> sessions_;
+    ScratchMap<std::string, ScratchPair<int, time_t>> loginFailures_;
 
     // lookups
     User* findUser(int id);
@@ -105,7 +103,7 @@ private:
     Ticket* findTicket(int id);
     const User& requireRole(int uid, std::initializer_list<Role> roles);
     const User& requireTeamFor(int uid, const Issue& issue);
-    template <typename T> static int nextId(const std::vector<T>& v);
+    template <typename T> static int nextId(const ScratchVector<T>& v);
 
     // core rules
     void admitReport(Report& r);
@@ -117,7 +115,7 @@ private:
     void notifyTeam(const Issue& issue, const std::string& text);
     void notifyRole(Role role, int issueId, const std::string& text);
     void notifyReporters(const Issue& issue, const std::string& text, bool onlyPending = false);
-    std::set<int> reporters(const Issue& issue) const;
+    ScratchSet<int> reporters(const Issue& issue) const;
     void tickLocked();
     void persist();
 

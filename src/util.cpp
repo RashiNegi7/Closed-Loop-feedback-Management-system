@@ -1,5 +1,4 @@
 #include "util.h"
-#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <random>
@@ -98,17 +97,17 @@ std::string trim(const std::string& s) {
 }
 
 std::string toUpper(std::string s) {
-    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::toupper(c); });
+    for (size_t i = 0; i < s.size(); ++i) s[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(s[i])));
     return s;
 }
 
 std::string toLower(std::string s) {
-    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::tolower(c); });
+    for (size_t i = 0; i < s.size(); ++i) s[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(s[i])));
     return s;
 }
 
-std::vector<std::string> splitWords(const std::string& s) {
-    std::vector<std::string> out;
+ScratchVector<std::string> splitWords(const std::string& s) {
+    ScratchVector<std::string> out;
     std::string cur;
     for (unsigned char c : s) {
         if (std::isalnum(c)) {

@@ -2,8 +2,8 @@
 #ifndef FB_UTIL_H
 #define FB_UTIL_H
 
+#include "ds.h"
 #include <string>
-#include <vector>
 
 namespace fb {
 
@@ -17,7 +17,7 @@ bool constantTimeEquals(const std::string& a, const std::string& b);
 std::string trim(const std::string& s);
 std::string toLower(std::string s);
 std::string toUpper(std::string s);
-std::vector<std::string> splitWords(const std::string& s);
+ScratchVector<std::string> splitWords(const std::string& s);
 std::string truncate(const std::string& s, size_t n);
 bool isAllDigits(const std::string& s);
 bool isNameWithoutDigits(const std::string& s);  // carried over from the Phase 2 prototype

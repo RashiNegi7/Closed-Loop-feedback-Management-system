@@ -1,16 +1,14 @@
 #include "text.h"
 #include "util.h"
-#include <algorithm>
 #include <cctype>
 #include <cmath>
-#include <map>
 
 namespace fb {
 
 namespace {
 
-const std::set<std::string>& stopWords() {
-    static const std::set<std::string> s = {
+const ScratchSet<std::string>& stopWords() {
+    static const ScratchSet<std::string> s = {
         "a", "an", "the", "is", "are", "was", "were", "be", "been", "am", "to", "of", "in", "on",
         "at", "for", "and", "or", "but", "so", "it", "its", "this", "that", "these", "those",
         "my", "our", "your", "their", "we", "i", "me", "us", "they", "he", "she", "you", "with",
@@ -25,8 +23,8 @@ const std::set<std::string>& stopWords() {
 }
 
 // Words that mean the same thing for grouping purposes (applied after stemming).
-const std::map<std::string, std::string>& synonyms() {
-    static const std::map<std::string, std::string> m = {
+const ScratchMap<std::string, std::string>& synonyms() {
+    static const ScratchMap<std::string, std::string> m = {
         {"wi", "wifi"}, {"fi", "wifi"}, {"wifi", "wifi"}, {"internet", "wifi"},
         {"network", "wifi"}, {"connectivity", "wifi"}, {"wlan", "wifi"}, {"connection", "wifi"},
         {"proj", "projector"}, {"beamer", "projector"}, {"projector", "projector"},
@@ -107,15 +105,15 @@ std::string collapseRepeats(const std::string& w) {
     return out;
 }
 
-std::set<std::string> collapsedSet(const std::set<std::string>& in) {
-    std::set<std::string> out;
+ScratchSet<std::string> collapsedSet(const ScratchSet<std::string>& in) {
+    ScratchSet<std::string> out;
     for (const std::string& w : in) out.insert(collapseRepeats(w));
     return out;
 }
 
-const std::set<std::string>& abusiveWords() {
+const ScratchSet<std::string>& abusiveWords() {
     // Stored collapsed ("useless" -> "useles") so that "uselesss" and "useless" both match.
-    static const std::set<std::string> s = collapsedSet({
+    static const ScratchSet<std::string> s = collapsedSet({
         "stoopid", "idiotic", "moronic",
         "stupid", "idiot", "idiots", "moron", "morons", "dumb", "dumbass", "bastard", "bastards",
         "crap", "shit", "shitty", "bullshit", "fuck", "fucking", "fucker", "asshole", "bitch",
@@ -126,19 +124,19 @@ const std::set<std::string>& abusiveWords() {
 }
 // Words that are only abusive when aimed at people; "garbage"/"trash" etc. are legitimate
 // words in facility complaints, so they are scored but not enough on their own.
-const std::set<std::string>& weakAbusiveWords() {
-    static const std::set<std::string> s = collapsedSet({"garbage", "trash", "hell", "bloody", "damn", "suck",
+const ScratchSet<std::string>& weakAbusiveWords() {
+    static const ScratchSet<std::string> s = collapsedSet({"garbage", "trash", "hell", "bloody", "damn", "suck",
                                             "sucks", "useless", "pathetic", "crap", "clown",
                                             "clowns", "fool", "fools", "loser", "losers"});
     return s;
 }
-const std::set<std::string>& threatWords() {
-    static const std::set<std::string> s = collapsedSet({"kill", "murder", "die", "destroy", "beat", "hurt",
+const ScratchSet<std::string>& threatWords() {
+    static const ScratchSet<std::string> s = collapsedSet({"kill", "murder", "die", "destroy", "beat", "hurt",
                                             "burn", "bomb", "shoot", "stab"});
     return s;
 }
-const std::set<std::string>& personWords() {
-    static const std::set<std::string> s = collapsedSet({"you", "he", "she", "him", "her", "them", "they",
+const ScratchSet<std::string>& personWords() {
+    static const ScratchSet<std::string> s = collapsedSet({"you", "he", "she", "him", "her", "them", "they",
                                             "teacher", "sir", "madam", "mam", "prof", "professor",
                                             "staff", "faculty", "hod", "principal", "dean", "guys"});
     return s;
@@ -146,7 +144,7 @@ const std::set<std::string>& personWords() {
 
 }  // namespace
 
-std::set<std::string> canonicalTokens(const std::string& textIn) {
+ScratchSet<std::string> canonicalTokens(const std::string& textIn) {
     std::string text = toLower(textIn);
     // join the most common split spellings before tokenising
     auto replaceAll = [&](const std::string& from, const std::string& to) {
@@ -171,7 +169,7 @@ std::set<std::string> canonicalTokens(const std::string& textIn) {
     replaceAll("not loading", "broken");
     replaceAll("not responding", "broken");
 
-    std::set<std::string> out;
+    ScratchSet<std::string> out;
     for (const std::string& raw : splitWords(text)) {
         if (raw.size() < 2 || stopWords().count(raw)) continue;
         auto direct = synonyms().find(raw);
@@ -187,22 +185,22 @@ std::set<std::string> canonicalTokens(const std::string& textIn) {
 namespace {
 // Things a complaint is about. Two reports about different things are different issues even if
 // they happen in the same room; two reports about the same thing get a small boost.
-const std::set<std::string>& objectTokens() {
-    static const std::set<std::string> s = {
+const ScratchSet<std::string>& objectTokens() {
+    static const ScratchSet<std::string> s = {
         "projector", "ac", "fan", "light", "wifi", "furniture", "water", "board", "mic", "speaker",
         "computer", "printer", "door", "window", "lift", "marks", "syllabus", "book", "login",
         "noise", "plug", "socket", "switch", "attendance", "timetable", "washroom", "canteen"};
     return s;
 }
 // Where it happens. Same equipment in a different place is treated as a separate issue.
-const std::set<std::string>& placeTokens() {
-    static const std::set<std::string> s = {"lab", "library", "canteen", "washroom", "hostel",
+const ScratchSet<std::string>& placeTokens() {
+    static const ScratchSet<std::string> s = {"lab", "library", "canteen", "washroom", "hostel",
                                             "ground", "auditorium", "office", "gate", "parking",
                                             "block", "building", "floor"};
     return s;
 }
 bool isNumber(const std::string& t) { return !t.empty() && std::isdigit(static_cast<unsigned char>(t[0])); }
-bool disjointNonEmpty(const std::set<std::string>& x, const std::set<std::string>& y) {
+bool disjointNonEmpty(const ScratchSet<std::string>& x, const ScratchSet<std::string>& y) {
     if (x.empty() || y.empty()) return false;
     for (const auto& t : x)
         if (y.count(t)) return false;
@@ -210,7 +208,7 @@ bool disjointNonEmpty(const std::set<std::string>& x, const std::set<std::string
 }
 }  // namespace
 
-double similarity(const std::set<std::string>& a, const std::set<std::string>& b) {
+double similarity(const ScratchSet<std::string>& a, const ScratchSet<std::string>& b) {
     if (a.empty() || b.empty()) return 0.0;
     size_t inter = 0;
     for (const auto& t : a) inter += b.count(t);
@@ -219,7 +217,7 @@ double similarity(const std::set<std::string>& a, const std::set<std::string>& b
     double cosine = inter / std::sqrt(static_cast<double>(a.size()) * static_cast<double>(b.size()));
     double score = 0.5 * jaccard + 0.5 * cosine;
 
-    std::set<std::string> objA, objB, plA, plB, numA, numB;
+    ScratchSet<std::string> objA, objB, plA, plB, numA, numB;
     for (const auto& t : a) {
         if (objectTokens().count(t)) objA.insert(t);
         if (placeTokens().count(t)) plA.insert(t);
@@ -237,13 +235,13 @@ double similarity(const std::set<std::string>& a, const std::set<std::string>& b
     if (disjointNonEmpty(objA, objB)) score *= 0.5;   // projector vs fan
     if (disjointNonEmpty(plA, plB)) score *= 0.5;     // lab vs library
     if (disjointNonEmpty(numA, numB)) score *= 0.4;   // room 204 vs room 305
-    return std::min(1.0, score);
+    return scratchMin(1.0, score);
 }
 
 AbuseResult detectAbuse(const std::string& text) {
     AbuseResult res;
     std::string norm = normaliseForAbuse(text);
-    std::vector<std::string> words = splitWords(norm);
+    ScratchVector<std::string> words = splitWords(norm);
 
     int strong = 0, weak = 0;
     std::string matched;
@@ -314,9 +312,9 @@ AbuseResult detectAbuse(const std::string& text) {
 }
 
 namespace {
-std::vector<std::string> matchPrefixes(const std::string& text, const std::vector<std::string>& list) {
-    std::vector<std::string> found;
-    std::vector<std::string> words = splitWords(text);
+ScratchVector<std::string> matchPrefixes(const std::string& text, const ScratchVector<std::string>& list) {
+    ScratchVector<std::string> found;
+    ScratchVector<std::string> words = splitWords(text);
     std::string joined = " " + toLower(text) + " ";
     for (const std::string& key : list) {
         bool hit = false;
@@ -332,8 +330,8 @@ std::vector<std::string> matchPrefixes(const std::string& text, const std::vecto
 }
 }  // namespace
 
-std::vector<std::string> criticalKeywords(const std::string& text) {
-    static const std::vector<std::string> k = {
+ScratchVector<std::string> criticalKeywords(const std::string& text) {
+    static const ScratchVector<std::string> k = {
         "fire", "smoke", "shock", "electrocut", "harass", "ragging", "assault", "threat",
         "unsafe", "danger", "injur", "collaps", "flood", "gas leak", "bully", "bullying",
         "discriminat", "abus", "molest", "stalk", "suicid", "self harm", "short circuit",
@@ -341,8 +339,8 @@ std::vector<std::string> criticalKeywords(const std::string& text) {
     return matchPrefixes(text, k);
 }
 
-std::vector<std::string> urgentKeywords(const std::string& text) {
-    static const std::vector<std::string> k = {
+ScratchVector<std::string> urgentKeywords(const std::string& text) {
+    static const ScratchVector<std::string> k = {
         "exam", "marks", "grade", "result", "fee", "payment", "attendance", "deadline",
         "submission", "internal", "assignment", "hall ticket", "admit card", "scholarship",
         "placement", "cannot access", "can't access", "unable to", "locked out"};

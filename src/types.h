@@ -2,12 +2,11 @@
 #ifndef FB_TYPES_H
 #define FB_TYPES_H
 
+#include "ds.h"
 #include <ctime>
-#include <map>
 #include <stdexcept>
 #include <string>
 #include <utility>
-#include <vector>
 
 namespace fb {
 
@@ -99,8 +98,8 @@ struct Issue {
     int id = 0;
     Category category = Category::Other;
     std::string title;
-    std::vector<int> reportIds;    // initial reports grouped into this issue
-    std::vector<int> followUpIds;  // follow-up comments from students
+    ScratchVector<int> reportIds;    // initial reports grouped into this issue
+    ScratchVector<int> followUpIds;  // follow-up comments from students
     IssueStatus status = IssueStatus::New;
     Priority priority = Priority::Low;
     int score = 0;
@@ -111,9 +110,9 @@ struct Issue {
     bool reminderSent = false;
     int ticketId = 0;
     int reopenCount = 0;
-    std::map<int, Confirmation> confirmations;  // student user id -> answer
+    ScratchMap<int, Confirmation> confirmations;  // student user id -> answer
     std::string closeNote;
-    std::vector<HistoryEntry> history;
+    ScratchVector<HistoryEntry> history;
 };
 
 struct TicketNote {
@@ -131,7 +130,7 @@ struct Ticket {
     bool autoCreated = false;
     bool escalated = false;
     std::string actionTaken;  // shown to reporting students when they are asked to confirm
-    std::vector<TicketNote> notes;  // internal working notes (team + moderator only)
+    ScratchVector<TicketNote> notes;  // internal working notes (team + moderator only)
     time_t createdAt = 0;
     time_t updatedAt = 0;
 };
@@ -146,12 +145,12 @@ struct Notification {
 };
 
 struct State {
-    std::vector<User> users;
-    std::vector<Report> reports;
-    std::vector<Issue> issues;
-    std::vector<Ticket> tickets;
-    std::vector<Notification> notifications;
-    std::map<std::string, int> enrollment;  // class name -> number of enrolled students
+    ScratchVector<User> users;
+    ScratchVector<Report> reports;
+    ScratchVector<Issue> issues;
+    ScratchVector<Ticket> tickets;
+    ScratchVector<Notification> notifications;
+    ScratchMap<std::string, int> enrollment;  // class name -> number of enrolled students
     long long clockOffset = 0;              // demo clock: seconds added to real time
 };
 

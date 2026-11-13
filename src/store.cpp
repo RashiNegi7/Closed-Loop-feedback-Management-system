@@ -89,8 +89,8 @@ Issue issueFrom(const json& j) {
     i.id = j.value("id", 0);
     i.category = enumOr<Category>(j, "category", parseCategory, Category::Other);
     i.title = j.value("title", "");
-    if (j.contains("reportIds")) i.reportIds = j["reportIds"].get<std::vector<int>>();
-    if (j.contains("followUpIds")) i.followUpIds = j["followUpIds"].get<std::vector<int>>();
+    if (j.contains("reportIds")) i.reportIds = j["reportIds"].get<ScratchVector<int>>();
+    if (j.contains("followUpIds")) i.followUpIds = j["followUpIds"].get<ScratchVector<int>>();
     i.status = enumOr<IssueStatus>(j, "status", parseIssueStatus, IssueStatus::New);
     i.priority = enumOr<Priority>(j, "priority", parsePriority, Priority::Low);
     i.score = j.value("score", 0);
@@ -181,7 +181,7 @@ json stateToJson(const State& st) {
 State stateFromJson(const json& j) {
     State st;
     st.clockOffset = j.value("clockOffset", static_cast<long long>(0));
-    if (j.contains("enrollment")) st.enrollment = j["enrollment"].get<std::map<std::string, int>>();
+    if (j.contains("enrollment")) st.enrollment = j["enrollment"].get<ScratchMap<std::string, int>>();
     if (j.contains("users")) for (const auto& x : j["users"]) st.users.push_back(userFrom(x));
     if (j.contains("reports")) for (const auto& x : j["reports"]) st.reports.push_back(reportFrom(x));
     if (j.contains("issues")) for (const auto& x : j["issues"]) st.issues.push_back(issueFrom(x));
@@ -214,13 +214,13 @@ void saveState(const std::string& path, const State& st) {
 #ifdef _WIN32
     if (!MoveFileExA(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
         DWORD error = GetLastError();
-        std::remove(tmp.c_str());
+        ::remove(tmp.c_str());
         throw std::system_error(static_cast<int>(error), std::system_category(), "cannot replace " + path);
     }
 #else
     if (std::rename(tmp.c_str(), path.c_str()) != 0) {
         int error = errno;
-        std::remove(tmp.c_str());
+        ::remove(tmp.c_str());
         throw std::system_error(error, std::system_category(), "cannot replace " + path);
     }
 #endif

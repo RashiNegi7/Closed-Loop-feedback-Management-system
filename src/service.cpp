@@ -4,7 +4,6 @@
 #include "text.h"
 #include "util.h"
 
-#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <exception>
@@ -103,9 +102,9 @@ bool Service::hasUsers() const {
 // ------------------------------------------------------------------ lookups
 
 template <typename T>
-int Service::nextId(const std::vector<T>& v) {
+int Service::nextId(const ScratchVector<T>& v) {
     int m = 0;
-    for (const auto& x : v) m = std::max(m, x.id);
+    for (const auto& x : v) m = scratchMax(m, x.id);
     return m + 1;
 }
 
@@ -152,9 +151,9 @@ bool Service::canSeeCategory(const User& u, Category c) const {
 // ------------------------------------------------------------------ accounts
 
 namespace {
-struct CourseInfo { const char* name; const char* code; std::vector<std::string> sections; };
-const std::vector<CourseInfo>& courseCatalog() {
-    static const std::vector<CourseInfo> c = {
+struct CourseInfo { const char* name; const char* code; ScratchVector<std::string> sections; };
+const ScratchVector<CourseInfo>& courseCatalog() {
+    static const ScratchVector<CourseInfo> c = {
         {"B.Tech CSE", "CSE", {"A", "B", "C", "D", "E", "F", "G", "H", "I", "ML1", "ML2", "ML3", "ML4", "ML5", "ML6", "CS1", "CS2", "DS1", "DS2"}}};
     return c;
 }
@@ -423,8 +422,8 @@ void Service::notifyRole(Role role, int issueId, const std::string& text) {
 void Service::notifyTeam(const Issue& issue, const std::string& text) {
     notifyRole(teamFor(issue.category), issue.id, text);
 }
-std::set<int> Service::reporters(const Issue& issue) const {
-    std::set<int> out;
+ScratchSet<int> Service::reporters(const Issue& issue) const {
+    ScratchSet<int> out;
     for (int rid : issue.reportIds)
         for (const auto& r : st_.reports)
             if (r.id == rid && r.moderation == Moderation::Approved) out.insert(r.studentUserId);
@@ -449,7 +448,8 @@ json Service::notifications(int uid) {
     requireRole(uid, {Role::Student, Role::Faculty, Role::Staff, Role::Moderator});
     json arr = json::array();
     int unread = 0;
-    for (auto it = st_.notifications.rbegin(); it != st_.notifications.rend(); ++it) {
+    for (size_t n = st_.notifications.size(); n-- > 0;) {
+        const Notification* it = &st_.notifications[n];
         if (it->userId != uid) continue;
         if (!it->read) ++unread;
         if (arr.size() < 100)
@@ -470,8 +470,8 @@ json Service::markNotificationsRead(int uid) {
 
 PriorityBreakdown Service::computePriority(const Issue& issue) const {
     PriorityBreakdown b;
-    std::map<std::string, std::set<int>> perClass;
-    std::set<int> students;
+    ScratchMap<std::string, ScratchSet<int>> perClass;
+    ScratchSet<int> students;
     std::string allText;
     for (int rid : issue.reportIds) {
         for (const auto& r : st_.reports) {
@@ -486,7 +486,7 @@ PriorityBreakdown Service::computePriority(const Issue& issue) const {
     for (const auto& kv : perClass) {
         auto e = st_.enrollment.find(kv.first);
         if (e != st_.enrollment.end() && e->second > 0)
-            b.maxClassPercent = std::max(b.maxClassPercent, 100.0 * kv.second.size() / e->second);
+            b.maxClassPercent = scratchMax(b.maxClassPercent, 100.0 * kv.second.size() / e->second);
     }
     b.pointsStudents = b.students >= 10 ? 3 : b.students >= 5 ? 2 : b.students >= 2 ? 1 : 0;
     b.pointsClasses = b.classes >= 4 ? 2 : b.classes >= 2 ? 1 : 0;
@@ -496,8 +496,8 @@ PriorityBreakdown Service::computePriority(const Issue& issue) const {
     b.pointsKeywords = !b.criticalWords.empty() ? 6 : (!b.urgentWords.empty() ? 1 : 0);
 
     time_t end = isOpen(issue.status) ? now() : (issue.closedAt ? issue.closedAt : now());
-    b.ageDays = static_cast<int>(std::max<long long>(0, (end - issue.createdAt) / DAY));
-    b.pointsAge = std::min(cfg_.ageCapPoints, b.ageDays / std::max(1, cfg_.ageDaysPerPoint));
+    b.ageDays = static_cast<int>(scratchMax<long long>(0, (end - issue.createdAt) / DAY));
+    b.pointsAge = scratchMin(cfg_.ageCapPoints, b.ageDays / scratchMax(1, cfg_.ageDaysPerPoint));
 
     b.score = b.pointsStudents + b.pointsClasses + b.pointsPercent + b.pointsKeywords + b.pointsAge;
     b.level = levelForScore(b.score);
@@ -546,7 +546,7 @@ void Service::refreshPriority(Issue& issue, bool announce) {
 
 // Puts an approved report into the most similar open issue of the same category, or opens a new one.
 void Service::admitReport(Report& r) {
-    std::set<std::string> tokens = canonicalTokens(r.message);
+    ScratchSet<std::string> tokens = canonicalTokens(r.message);
     Issue* best = nullptr;
     double bestScore = 0;
     for (auto& issue : st_.issues) {
@@ -562,7 +562,7 @@ void Service::admitReport(Report& r) {
     std::string ref = "Reference #" + std::to_string(r.id);
     if (best && bestScore >= cfg_.groupThreshold) {
         Issue& issue = *best;
-        std::set<int> before = reporters(issue);
+        ScratchSet<int> before = reporters(issue);
         issue.reportIds.push_back(r.id);
         r.issueId = issue.id;
         bool newStudent = !before.count(r.studentUserId);
@@ -582,7 +582,7 @@ void Service::admitReport(Report& r) {
         refreshPriority(issue, true);
         int others = static_cast<int>(reporters(issue).size()) - 1;
         notify(r.studentUserId, issue.id,
-               ref + " was grouped into issue #" + std::to_string(issue.id) + " with " + std::to_string(std::max(0, others)) +
+               ref + " was grouped into issue #" + std::to_string(issue.id) + " with " + std::to_string(scratchMax(0, others)) +
                    " other student(s). Status: " + toString(issue.status) + ".");
     } else {
         Issue issue;
@@ -645,8 +645,8 @@ json Service::myReports(int uid) {
     READ_LOCK;
     requireRole(uid, {Role::Student});
     json arr = json::array();
-    for (auto it = st_.reports.rbegin(); it != st_.reports.rend(); ++it) {
-        const Report& r = *it;
+    for (size_t n = st_.reports.size(); n-- > 0;) {
+        const Report& r = st_.reports[n];
         if (r.studentUserId != uid || r.kind != ReportKind::Initial) continue;
         json j = {{"reference", r.id}, {"category", toString(r.category)}, {"message", r.message},
                   {"moderation", toString(r.moderation)}, {"at", static_cast<long long>(r.createdAt)}};
@@ -751,7 +751,7 @@ json Service::listIssues(int uid, const json& filter) {
     bool hasPri = filter.contains("priority") && filter["priority"].is_string() && parsePriority(filter["priority"].get<std::string>(), priFilter);
 
     ScratchPriorityQueue<const Issue*, IssuePriorityOrder> queue;  // team-written heap from Phase 2
-    std::vector<const Issue*> closed;
+    ScratchVector<const Issue*> closed;
     for (const auto& i : st_.issues) {
         if (!canSeeCategory(u, i.category)) continue;
         if (hasCat && i.category != catFilter) continue;
@@ -763,7 +763,7 @@ json Service::listIssues(int uid, const json& filter) {
     if (include != "closed")
         while (!queue.empty()) { arr.push_back(issueSummary(*queue.top())); queue.pop(); }
     if (include != "open") {
-        std::sort(closed.begin(), closed.end(), [](const Issue* a, const Issue* b) { return a->closedAt > b->closedAt; });
+        scratchSort(closed.begin(), closed.end(), [](const Issue* a, const Issue* b) { return a->closedAt > b->closedAt; });
         for (const Issue* i : closed) arr.push_back(issueSummary(*i));
     }
     return arr;
@@ -970,8 +970,8 @@ void Service::tickLocked() {
 
 // Class impact: how many DISTINCT students in which classes. Never lists who they are.
 json Service::impactJson(const Issue& issue) const {
-    std::map<std::string, std::set<int>> perClass;
-    std::set<int> all;
+    ScratchMap<std::string, ScratchSet<int>> perClass;
+    ScratchSet<int> all;
     for (int rid : issue.reportIds)
         for (const auto& r : st_.reports)
             if (r.id == rid && r.moderation == Moderation::Approved) {
@@ -984,7 +984,7 @@ json Service::impactJson(const Issue& issue) const {
         auto e = st_.enrollment.find(kv.first);
         int enrolled = e == st_.enrollment.end() ? 0 : e->second;
         double pct = enrolled > 0 ? std::round(1000.0 * kv.second.size() / enrolled) / 10.0 : 0.0;
-        maxPct = std::max(maxPct, pct);
+        maxPct = scratchMax(maxPct, pct);
         classes.push_back({{"className", kv.first}, {"students", static_cast<int>(kv.second.size())},
                            {"enrolled", enrolled}, {"percent", pct}});
     }
@@ -1084,11 +1084,11 @@ json Service::issueDetail(const Issue& issue, const User& viewer) const {
 json Service::analytics(int uid) {
     READ_LOCK;
     const User& u = requireRole(uid, {Role::Faculty, Role::Staff, Role::Moderator});
-    std::map<std::string, int> byStatus, byCategory, byPriority;
-    std::map<std::string, std::set<int>> classStudents;  // class -> distinct students with an open issue
+    ScratchMap<std::string, int> byStatus, byCategory, byPriority;
+    ScratchMap<std::string, ScratchSet<int>> classStudents;  // class -> distinct students with an open issue
     int open = 0, resolved = 0, closedNoResp = 0, total = 0;
     double resDays = 0;
-    std::vector<const Issue*> visible;
+    ScratchVector<const Issue*> visible;
     for (const auto& i : st_.issues) {
         if (!canSeeCategory(u, i.category)) continue;
         visible.push_back(&i);

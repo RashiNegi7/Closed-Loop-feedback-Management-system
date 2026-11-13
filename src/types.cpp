@@ -1,12 +1,11 @@
 #include "types.h"
-#include <algorithm>
 #include <cctype>
 
 namespace fb {
 
 namespace {
 std::string lower(std::string s) {
-    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::tolower(c); });
+    for (size_t i = 0; i < s.size(); ++i) s[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(s[i])));
     return s;
 }
 }  // namespace

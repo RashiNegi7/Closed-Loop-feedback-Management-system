@@ -24,7 +24,7 @@ static int g_checks = 0, g_failed = 0;
 struct World {
     Service svc;
     int admin = 0, faculty = 0, staff = 0;
-    std::vector<int> students;  // 6 students: 0-2 CSE-A, 3-4 CSE-B, 5 ECE-A
+    ScratchVector<int> students;  // 6 students: 0-2 CSE-A, 3-4 CSE-B, 5 ECE-A
     World() {
         svc.bootstrapAdmin("Admin1234");
         admin = svc.state().users[0].id;
@@ -319,7 +319,7 @@ static void testAnonymity() {
 static void testPersistence() {
     std::cout << "file persistence\n";
     std::string path = (std::filesystem::temp_directory_path() / "fb_test_store.json").string();
-    std::remove(path.c_str());
+    ::remove(path.c_str());
     int issueId, tid, uid;
     {
         Service s(path);
@@ -343,13 +343,13 @@ static void testPersistence() {
     CHECK(s2.authenticate(tok) == uid);
     CHECK(s2.myReports(uid).size() == 1);
     CHECK(s2.notifications(uid)["items"].size() >= 1);
-    std::remove(path.c_str());
+    ::remove(path.c_str());
     // corrupt file is refused rather than silently wiped
     { FILE* f = fopen(path.c_str(), "w"); fputs("{not json", f); fclose(f); }
     bool threw = false;
     try { Service s3(path); } catch (const std::exception&) { threw = true; }
     CHECK(threw);
-    std::remove(path.c_str());
+    ::remove(path.c_str());
 
     std::filesystem::path missingPath = std::filesystem::temp_directory_path() /
         ("fb_missing_" + randomHex(8)) / "store.json";
@@ -490,12 +490,62 @@ static void testDemoSeed() {
     CHECK(!svc.loginById("FAC1001", "Demo@1234").empty());
 }
 
+static void testContainers() {
+    std::cout << "team-written containers\n";
+    ScratchVector<int> v;
+    for (int i = 0; i < 20; ++i) v.push_back(i);
+    CHECK(v.size() == 20 && v[0] == 0 && v.back() == 19);
+    v.erase(v.begin() + 5);
+    CHECK(v.size() == 19 && v[5] == 6);
+    v.insert(v.begin() + 2, 99);
+    CHECK(v.size() == 20 && v[2] == 99 && v[3] == 2);
+    ScratchVector<int> copy = v;
+    copy[0] = -1;
+    CHECK(v[0] == 0 && copy[0] == -1 && copy.size() == v.size());  // copies are independent
+    v.erase(v.begin(), v.begin() + 10);
+    CHECK(v.size() == 10);
+    ScratchVector<std::string> names = {"b", "a", "c"};
+    scratchSort(names.begin(), names.end(), [](const std::string& x, const std::string& y) { return x < y; });
+    CHECK(names[0] == "a" && names[1] == "b" && names[2] == "c");
+
+    ScratchSet<std::string> s;
+    CHECK(s.insert("pear") && s.insert("apple") && s.insert("fig"));
+    CHECK(!s.insert("fig"));  // no duplicates
+    CHECK(s.size() == 3 && s.count("apple") == 1 && s.count("kiwi") == 0);
+    std::string order;
+    for (const auto& x : s) order += x + ",";
+    CHECK(order == "apple,fig,pear,");  // kept in sorted order
+    CHECK(s.erase("fig") == 1 && s.erase("fig") == 0 && s.size() == 2);
+
+    ScratchMap<std::string, int> m;
+    m["CSE-B"] = 2;
+    m["CSE-A"] = 1;
+    ++m["CSE-A"];
+    CHECK(m.size() == 2 && m["CSE-A"] == 2 && m.count("CSE-B") == 1 && m.count("ECE") == 0);
+    CHECK(m.find("CSE-B")->second == 2 && m.find("zzz") == m.end());
+    CHECK(!m.emplace("CSE-A", 9) && m["CSE-A"] == 2 && m.emplace("ECE-A", 3));
+    std::string keys;
+    for (const auto& e : m) keys += e.first + ";";
+    CHECK(keys == "CSE-A;CSE-B;ECE-A;");
+    CHECK(m.erase("CSE-B") == 1 && m.size() == 2);
+
+    struct Less { bool operator()(int a, int b) const { return a < b; } };
+    ScratchPriorityQueue<int, Less> pq;
+    int vals[] = {5, 1, 9, 3, 7};
+    for (int x : vals) pq.push(x);
+    CHECK(pq.top() == 9);
+    pq.pop();
+    CHECK(pq.top() == 7);
+    CHECK(scratchMax(3, 8) == 8 && scratchMin(3, 8) == 3);
+}
+
 int main() {
     testAccounts();
     testStaffSignup();
     testCourses();
     testIdLogin();
     testDemoSeed();
+    testContainers();
     testSubmissionAndGrouping();
     testPriorityAndAgeing();
     testClosedLoop();
