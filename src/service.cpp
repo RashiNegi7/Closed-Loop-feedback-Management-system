@@ -1211,10 +1211,14 @@ void Service::seedDemoData() {
 }
 
 // Sample complaints from the demo student IDs, worked through the real workflow so the history,
-// notifications and analytics are genuine. Only runs on an empty system.
+// notifications and analytics are genuine. They are filed on past days (the demo clock is moved back
+// while seeding and restored afterwards), so ages, the per-day chart and resolution times look real.
+// Only runs on an empty system.
 void Service::seedDemoComplaints() {
     CommitGuard g(*this);
     if (!st_.reports.empty()) return;
+    const long long base = st_.clockOffset;
+    auto at = [&](int daysAgo) { st_.clockOffset = base - static_cast<long long>(daysAgo) * DAY; };
     auto uid = [&](const std::string& un) {
         for (const auto& u : st_.users) if (u.username == un) return u.id;
         return 0;
@@ -1222,86 +1226,111 @@ void Service::seedDemoComplaints() {
     int fac = uid("faculty1"), stf = uid("staff1"), fac2 = uid("faculty2"), stf2 = uid("staff2");
     int s[13];
     for (int i = 1; i <= 12; ++i) s[i] = uid("student" + std::to_string(i));
-    auto post = [&](int stu, const char* cat, const char* msg) { return submitReport(stu, {{"category", cat}, {"message", msg}}); };
-    // works an issue up to "waiting for confirmation"
-    auto fix = [&](int team, int issueId, const char* action) {
+    auto post = [&](int day, int stu, const char* cat, const char* msg) {
+        at(day);
+        return submitReport(stu, {{"category", cat}, {"message", msg}});
+    };
+    // review, open the ticket and take it (one day); returns the ticket id
+    auto start = [&](int team, int issueId, int day) {
+        at(day);
         reviewIssue(team, issueId);
         int tid = openTicket(team, issueId)["id"].get<int>();
         claimTicket(team, tid, json::object());
+        return tid;
+    };
+    auto done = [&](int team, int tid, int day, const char* action) {
+        at(day);
         completeTicket(team, tid, {{"actionTaken", action}});
     };
-    auto yes = [&](int stu, int issueId) { confirm(stu, issueId, {{"solved", true}}); };
+    auto yes = [&](int day, int stu, int issueId) {
+        at(day);
+        confirm(stu, issueId, {{"solved", true}});
+    };
+    auto no = [&](int day, int stu, int issueId, const char* why) {
+        at(day);
+        confirm(stu, issueId, {{"solved", false}, {"comment", why}});
+    };
 
     // 1) Teaching, three students report the same thing -> grouped, solved by faculty, all confirm -> Resolved
-    int a = post(s[1], "Teaching", "The data structures lectures go too fast and the examples are not explained properly")["issueId"].get<int>();
-    post(s[4], "Teaching", "Data structures lectures are too fast and the examples are not explained properly in class");
-    post(s[2], "Teaching", "Examples in the data structures lectures are not explained properly and the pace is too fast");
-    fix(fac, a, "Added a Friday revision class and shared worked examples on the portal");
-    yes(s[1], a); yes(s[4], a); yes(s[2], a);
+    int a = post(12, s[1], "Teaching", "The data structures lectures go too fast and the examples are not explained properly")["issueId"].get<int>();
+    post(12, s[4], "Teaching", "Data structures lectures are too fast and the examples are not explained properly in class");
+    post(11, s[2], "Teaching", "Examples in the data structures lectures are not explained properly and the pace is too fast");
+    int ta = start(fac, a, 10);
+    done(fac, ta, 8, "Added a Friday revision class and shared worked examples on the portal");
+    yes(7, s[1], a); yes(7, s[4], a); yes(6, s[2], a);
 
     // 2) Facilities, two students, solved by staff, both confirm -> Resolved
-    int b = post(s[5], "Facilities", "The projector in room 204 is not working and the display keeps flickering")["issueId"].get<int>();
-    post(s[1], "Facilities", "Projector in room 204 keeps flickering and often does not work during lectures");
-    fix(stf, b, "Replaced the projector lamp and the HDMI cable in room 204");
-    yes(s[5], b); yes(s[1], b);
+    int b = post(11, s[5], "Facilities", "The projector in room 204 is not working and the display keeps flickering")["issueId"].get<int>();
+    post(10, s[1], "Facilities", "Projector in room 204 keeps flickering and often does not work during lectures");
+    int tb = start(stf, b, 9);
+    done(stf, tb, 7, "Replaced the projector lamp and the HDMI cable in room 204");
+    yes(6, s[5], b); yes(6, s[1], b);
 
     // 3) Portal problem fixed, student says it is NOT solved yet -> the loop reopens it
-    int c = post(s[3], "Portal", "Lecture notes cannot be downloaded from the student portal and it shows an error")["issueId"].get<int>();
-    fix(stf, c, "Restarted the file service on the portal server");
-    confirm(s[3], c, {{"solved", false}, {"comment", "I still get the same error when I try to download the notes"}});
+    int c = post(9, s[3], "Portal", "Lecture notes cannot be downloaded from the student portal and it shows an error")["issueId"].get<int>();
+    int tc = start(stf, c, 8);
+    done(stf, tc, 6, "Restarted the file service on the portal server");
+    no(5, s[3], c, "I still get the same error when I try to download the notes");
 
     // 4) Teaching, solved by faculty, one student confirmed and one still to answer -> waiting for confirmation
-    int d = post(s[3], "Teaching", "The lab timetable clashes with the mathematics lecture every Wednesday afternoon")["issueId"].get<int>();
-    post(s[6], "Teaching", "Wednesday afternoon lab timetable clashes with the mathematics lecture for our class");
-    fix(fac, d, "Moved the Wednesday lab to Thursday morning and updated the timetable");
-    yes(s[3], d);
+    int d = post(3, s[3], "Teaching", "The lab timetable clashes with the mathematics lecture every Wednesday afternoon")["issueId"].get<int>();
+    post(3, s[6], "Teaching", "Wednesday afternoon lab timetable clashes with the mathematics lecture for our class");
+    int td = start(fac, d, 2);
+    done(fac, td, 1, "Moved the Wednesday lab to Thursday morning and updated the timetable");
+    yes(1, s[3], d);
 
     // 5) Under review, ticket taken by staff
-    int e = post(s[2], "Facilities", "The water cooler on the second floor is leaking near the staircase")["issueId"].get<int>();
-    reviewIssue(stf, e);
-    claimTicket(stf, openTicket(stf, e)["id"].get<int>(), json::object());
+    int e = post(6, s[2], "Facilities", "The water cooler on the second floor is leaking near the staircase")["issueId"].get<int>();
+    start(stf, e, 4);
 
     // 6) New, not yet looked at
-    post(s[4], "Other", "The library closes too early on weekdays during the exam weeks");
-    post(s[6], "Portal", "The attendance page on the portal is very slow to load in the evening");
+    post(4, s[4], "Other", "The library closes too early on weekdays during the exam weeks");
+    post(2, s[6], "Portal", "The attendance page on the portal is very slow to load in the evening");
 
-    // 7) Safety report: critical words ("sparking", "exposed wire", "unsafe") give it the top priority and move it to review with a ticket automatically; staff took the ticket
-    int iSafety = post(s[7], "Facilities", "Sparking from an exposed wire near the switchboard in lab 3 is unsafe for students")["issueId"].get<int>();
-    post(s[8], "Facilities", "Exposed wire sparking near the lab 3 switchboard is unsafe, please check it urgently");
+    // 7) Safety report: critical words ("sparking", "exposed wire", "unsafe") give it the top priority and move it to
+    //    review with a ticket automatically; staff took the ticket a day later
+    int f = post(8, s[7], "Facilities", "Sparking from an exposed wire near the switchboard in lab 3 is unsafe for students")["issueId"].get<int>();
+    post(8, s[8], "Facilities", "Exposed wire sparking near the lab 3 switchboard is unsafe, please check it urgently");
+    at(7);
     for (const auto& t : st_.tickets)  // critical issues get their ticket automatically
-        if (t.issueId == iSafety) claimTicket(stf2, t.id, json::object());
+        if (t.issueId == f) claimTicket(stf2, t.id, json::object());
 
     // 8) Five students from four classes: reaches High priority, solved by a second faculty member
-    int iMarks = post(s[7], "Teaching", "Internal marks for the operating systems assignment are not visible on the portal")["issueId"].get<int>();
-    post(s[8], "Teaching", "Operating systems assignment internal marks are not visible on the portal");
-    post(s[9], "Teaching", "We cannot see the internal marks of the operating systems assignment on the portal");
-    post(s[10], "Teaching", "Operating systems assignment marks are missing from the portal internal marks page");
-    post(s[3], "Teaching", "Internal marks of the operating systems assignment do not show on the portal");
-    fix(fac2, iMarks, "Uploaded the missing internal marks and shared the evaluation sheet with the class");
-    yes(s[7], iMarks); yes(s[8], iMarks); yes(s[9], iMarks); yes(s[10], iMarks); yes(s[3], iMarks);
+    int m = post(9, s[7], "Teaching", "Internal marks for the operating systems assignment are not visible on the portal")["issueId"].get<int>();
+    post(9, s[8], "Teaching", "Operating systems assignment internal marks are not visible on the portal");
+    post(8, s[9], "Teaching", "We cannot see the internal marks of the operating systems assignment on the portal");
+    post(8, s[10], "Teaching", "Operating systems assignment marks are missing from the portal internal marks page");
+    post(7, s[3], "Teaching", "Internal marks of the operating systems assignment do not show on the portal");
+    int tm = start(fac2, m, 6);
+    done(fac2, tm, 4, "Uploaded the missing internal marks and shared the evaluation sheet with the class");
+    yes(3, s[7], m); yes(3, s[8], m); yes(3, s[9], m); yes(2, s[10], m); yes(2, s[3], m);
 
     // 9) Canteen filter, solved by the second staff member
-    int iFilter = post(s[11], "Facilities", "The water filter in the ground floor canteen has been out of order for a week")["issueId"].get<int>();
-    post(s[12], "Facilities", "Ground floor canteen water filter is out of order since last week");
-    fix(stf2, iFilter, "Replaced the filter cartridge and cleaned the storage tank");
-    yes(s[11], iFilter); yes(s[12], iFilter);
+    int h = post(5, s[11], "Facilities", "The water filter in the ground floor canteen has been out of order for a week")["issueId"].get<int>();
+    post(5, s[12], "Facilities", "Ground floor canteen water filter is out of order since last week");
+    int th = start(stf2, h, 4);
+    done(stf2, th, 3, "Replaced the filter cartridge and cleaned the storage tank");
+    yes(2, s[11], h); yes(2, s[12], h);
 
     // 10) Attendance mistake: fixed, but one student says it is still wrong
-    int iAttend = post(s[2], "Teaching", "Attendance for the Friday lab session was marked wrong for several students")["issueId"].get<int>();
-    post(s[5], "Teaching", "Friday lab attendance was marked wrong for several of us in the session");
-    fix(fac, iAttend, "Corrected the Friday lab attendance in the register");
-    yes(s[5], iAttend);
-    confirm(s[2], iAttend, {{"solved", false}, {"comment", "My attendance for that Friday is still showing absent"}});
+    int k = post(7, s[2], "Teaching", "Attendance for the Friday lab session was marked wrong for several students")["issueId"].get<int>();
+    post(6, s[5], "Teaching", "Friday lab attendance was marked wrong for several of us in the session");
+    int tk = start(fac, k, 5);
+    done(fac, tk, 4, "Corrected the Friday lab attendance in the register");
+    yes(3, s[5], k);
+    no(2, s[2], k, "My attendance for that Friday is still showing absent");
 
     // 11) Under review, in progress and new
-    int iDoubt = post(s[10], "Teaching", "We need extra doubt solving sessions for algorithms before the mid semester exams")["issueId"].get<int>();
-    reviewIssue(fac2, iDoubt);
-    int iBus = post(s[11], "Other", "The evening bus route should wait for students until the lab sessions finish")["issueId"].get<int>();
-    post(s[12], "Other", "Evening bus should wait until the lab sessions finish so we can reach home safely");
-    reviewIssue(stf, iBus);
-    claimTicket(stf, openTicket(stf, iBus)["id"].get<int>(), json::object());
-    post(s[12], "Other", "The parking area near the main gate becomes overcrowded every morning");
-    post(s[7], "Portal", "Fee receipt download gives a blank white page whenever I open the payments section");
+    int q = post(3, s[10], "Teaching", "We need extra doubt solving sessions for algorithms before the mid semester exams")["issueId"].get<int>();
+    at(2);
+    reviewIssue(fac2, q);
+    int n = post(2, s[11], "Other", "The evening bus route should wait for students until the lab sessions finish")["issueId"].get<int>();
+    post(1, s[12], "Other", "Evening bus should wait until the lab sessions finish so we can reach home safely");
+    start(stf, n, 1);
+    post(1, s[12], "Other", "The parking area near the main gate becomes overcrowded every morning");
+    post(0, s[7], "Portal", "Fee receipt download gives a blank white page whenever I open the payments section");
+
+    st_.clockOffset = base;  // back to the real clock
 }
 
 }  // namespace fb
