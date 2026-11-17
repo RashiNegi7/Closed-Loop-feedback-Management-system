@@ -1,6 +1,0 @@
-build/
-data/store.json
-*.exe
-feedback_server
-feedback_console
-run_tests
