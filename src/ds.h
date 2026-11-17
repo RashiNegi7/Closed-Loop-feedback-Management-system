@@ -1,4 +1,4 @@
-// Team-written data structures. The project does not use STL containers or algorithms.
+// Team-written data structures. The project does not use STL containers or algo
 //   ScratchVector        : growable array
 //   ScratchSet           : ordered set (sorted array, binary search)
 //   ScratchMap           : ordered map (sorted array, binary search)
