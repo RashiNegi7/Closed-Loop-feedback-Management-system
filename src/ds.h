@@ -311,6 +311,5 @@ private:
     ScratchVector<T> items_;
     Compare compare_;
 };
-
 #endif
 
