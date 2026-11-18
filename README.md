@@ -23,7 +23,7 @@ Requires `g++` (C++17), `make`, and `python3` (only for the end-to-end test). Cr
 
 ```bash
 make                 # builds feedback_server, feedback_console, run_tests
-make test            # 212 unit/integration checks
+make test            # 213 unit/integration checks
 ./feedback_server --demo          # web app on http://127.0.0.1:8080
 ./feedback_console --demo         # console version (same engine)
 python3 tests/smoke_http.py http://127.0.0.1:8080 <admin password>   # 51 end-to-end API checks, run on a FRESH data file (no --demo)
@@ -122,7 +122,7 @@ Still used from the standard library, as allowed: `std::string` and its helpers,
 | Crow REST API and web portal | `src/server.cpp`, `web/` |
 | In-app notifications | `Service::notify*`; *Notifications* tab |
 | Demo data | `Service::seedDemoData`, `seedDemoComplaints` |
-| Automated tests | `tests/test_all.cpp` (212 checks), `tests/smoke_http.py` (51 checks) |
+| Automated tests | `tests/test_all.cpp` (213 checks), `tests/smoke_http.py` (51 checks) |
 
 The earlier containers `ScratchVector` and `ScratchPriorityQueue` from Phase 2 were extended in `src/ds.h`. The original prototype is preserved in `legacy_phase2/`.
 

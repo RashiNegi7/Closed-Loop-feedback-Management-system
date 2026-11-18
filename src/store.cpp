@@ -1,6 +1,7 @@
 #include "store.h"
 #include <cerrno>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <system_error>
@@ -203,6 +204,12 @@ bool loadState(const std::string& path, State& out) {
 }
 
 void saveState(const std::string& path, const State& st) {
+    // a fresh download has no data/ folder yet, so create the folder that will hold the data file
+    std::filesystem::path folder = std::filesystem::path(path).parent_path();
+    if (!folder.empty()) {
+        std::error_code ignored;
+        std::filesystem::create_directories(folder, ignored);
+    }
     std::string tmp = path + ".tmp";
     {
         std::ofstream out(tmp, std::ios::trunc);
